@@ -1,5 +1,5 @@
 import React from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import { ShieldAlert, ArrowRight, HeartPulse, Activity, Check, Building2 } from 'lucide-react';
 
 export const MissionPortal: React.FC = () => {

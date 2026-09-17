@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import type { TimelineEventCategory } from '../../types/emergency';
 import { ChevronDown, ChevronUp, Radio, Activity } from 'lucide-react';
 

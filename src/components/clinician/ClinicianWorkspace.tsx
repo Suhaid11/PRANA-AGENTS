@@ -1,5 +1,5 @@
 import React from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import { CareConduit } from '../conduit/CareConduit';
 import { CareRail } from '../timeline/CareRail';
 import { Stethoscope, CheckCircle2, FileQuestion, ArrowUpRight, Check, Activity, ShieldCheck } from 'lucide-react';

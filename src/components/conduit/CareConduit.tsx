@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import { Ambulance, Building2, Activity, ArrowRight, ShieldCheck, CheckCircle2, Stethoscope } from 'lucide-react';
 import { WhyThisHospitalModal } from '../facility/WhyThisHospitalModal';
 

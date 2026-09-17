@@ -1,5 +1,6 @@
 import React from 'react';
-import { EmergencyProvider, useEmergency } from './context/EmergencyContext';
+import { EmergencyProvider } from './context/EmergencyContext';
+import { useEmergency } from './context/useEmergency';
 import { PranaShell } from './components/shell/PranaShell';
 import { MissionPortal } from './components/portal/MissionPortal';
 import { AmbulanceWorkspace } from './components/ambulance/AmbulanceWorkspace';

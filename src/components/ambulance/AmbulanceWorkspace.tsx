@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import { CareConduit } from '../conduit/CareConduit';
 import { PatientCard } from './PatientCard';
 import { VitalCard } from './VitalCard';

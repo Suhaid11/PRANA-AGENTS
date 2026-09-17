@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import type { HospitalCandidate } from '../../types/emergency';
 import { 
   Play, 

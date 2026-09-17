@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import type { TimelineEvent } from '../../types/emergency';
 import { X, ChevronDown, ChevronUp, History, Activity, Radio, AlertTriangle, ShieldAlert } from 'lucide-react';
 

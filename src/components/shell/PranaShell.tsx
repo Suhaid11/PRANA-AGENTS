@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import type { UserRole } from '../../types/emergency';
 import { 
   RotateCcw, 

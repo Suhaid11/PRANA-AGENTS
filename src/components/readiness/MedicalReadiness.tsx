@@ -1,5 +1,5 @@
 import React from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import { Boxes, Check } from 'lucide-react';
 
 export const MedicalReadiness: React.FC = () => {

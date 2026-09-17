@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { 
   EmergencyCase, 
   UserRole, 
@@ -9,6 +9,7 @@ import type {
   HospitalCandidate 
 } from '../types/emergency';
 import { initialMedicalReadiness } from '../data/seedData';
+import { EmergencyContext } from './contextDefinition';
 import {
   calculateDerivedEta,
   startScenarioCase,
@@ -27,39 +28,6 @@ import {
   evaluateSimulationDecisionEngine,
 } from './emergencyEngine';
 
-interface EmergencyContextType {
-  activeCase: EmergencyCase;
-  activeRole: UserRole;
-  setActiveRole: (role: UserRole) => void;
-  isStreaming: boolean;
-  toggleStreaming: () => void;
-  derivedEta: number; // Non-negotiable single source of truth for ETA
-  medicalReadiness: MedicalReadinessItem[];
-  addTimelineEvent: (event: Omit<TimelineEvent, 'id' | 'timestamp'>) => void;
-  recordVitalSnapshot: (snapshot: Omit<VitalSnapshot, 'timestamp'>) => void;
-  registerPatient: (patient: PatientProfile) => void;
-  triggerVitalDeterioration: (newVitals: Omit<VitalSnapshot, 'timestamp'>) => void;
-  computeAiSignal: () => void;
-  alertClinician: () => void;
-  endorseProtocol: (
-    action: 'CONFIRMED' | 'DATA_REQUESTED' | 'ESCALATED' | 'ACKNOWLEDGED',
-    notes?: string,
-    clinicianId?: string,
-    clinicianName?: string,
-    authorizedProtocol?: string
-  ) => void;
-  recalculateFacilityMatching: (candidatesOverride?: HospitalCandidate[]) => void;
-  dispatchHospitalPreAlert: () => void;
-  acknowledgeHospitalPreAlert: (acknowledgedBy?: string) => void;
-  confirmHospitalBay: (bayName?: string, confirmedBy?: string) => void;
-  setTrafficDelay: (additionalMinutes?: number) => void;
-  continueCare: (detail?: string) => void;
-  selectScenario: (scenarioId: string) => void;
-  resetMission: () => void;
-}
-
-const EmergencyContext = createContext<EmergencyContextType | null>(null);
-
 export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [activeCase, setActiveCase] = useState<EmergencyCase>(() => startScenarioCase('PR-8492'));
   const [activeRole, setActiveRole] = useState<UserRole>('FIELD_MEDIC');
@@ -69,7 +37,7 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   // Single derived ETA source of truth (read by Ambulance, Clinician, Hospital workspaces, and Shell)
   const derivedEta = useMemo(() => {
     return calculateDerivedEta(activeCase.ambulance);
-  }, [activeCase.ambulance.baseEtaMinutes, activeCase.ambulance.trafficDelayMinutes]);
+  }, [activeCase.ambulance]);
 
   // Deterministic reset without page reload
   const resetMission = useCallback(() => {
@@ -261,10 +229,3 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   );
 };
 
-export const useEmergency = () => {
-  const context = useContext(EmergencyContext);
-  if (!context) {
-    throw new Error('useEmergency must be used within an EmergencyProvider');
-  }
-  return context;
-};

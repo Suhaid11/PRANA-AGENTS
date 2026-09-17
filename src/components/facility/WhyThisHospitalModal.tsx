@@ -1,5 +1,5 @@
 import React from 'react';
-import { useEmergency } from '../../context/EmergencyContext';
+import { useEmergency } from '../../context/useEmergency';
 import { ShieldCheck, X, Building2, CheckCircle2, Gauge, Clock, Bed } from 'lucide-react';
 
 interface WhyThisHospitalModalProps {

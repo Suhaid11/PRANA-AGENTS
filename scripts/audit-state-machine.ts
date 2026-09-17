@@ -48,7 +48,6 @@ const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
 const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
 const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
 const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
-const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
 
 function runScenarioAudit(
   scenarioId: string,
@@ -432,19 +431,19 @@ function verifyMultiScenarioReset(): boolean {
   const t1 = startScenarioCase('PR-8492');
   const t1Modified = triggerVitalDeteriorationState(t1, { heartRate: 130, spo2: 88, systolicBp: 82, diastolicBp: 50, respiratoryRate: 28, temperatureC: 36.5 });
   const t1Reset = startScenarioCase('PR-8492');
-  const t1Clean = t1Reset.currentVitals.heartRate === 112 && t1Reset.timeline.length === 5;
+  const t1Clean = t1Modified.currentVitals.heartRate === 130 && t1Reset.currentVitals.heartRate === 112 && t1Reset.timeline.length === 5;
 
   // 2. Snakebite -> Reset
   const s1 = startScenarioCase('PR-7104');
   const s1Modified = triggerVitalDeteriorationState(s1, { heartRate: 120, spo2: 94, systolicBp: 100, diastolicBp: 62, respiratoryRate: 22, temperatureC: 37.2 });
   const s1Reset = startScenarioCase('PR-7104');
-  const s1Clean = s1Reset.currentVitals.heartRate === 106 && s1Reset.patient.name === 'Sunita Gowda';
+  const s1Clean = s1Modified.currentVitals.heartRate === 120 && s1Reset.currentVitals.heartRate === 106 && s1Reset.patient.name === 'Sunita Gowda';
 
   // 3. Poisoning -> Reset
   const p1 = startScenarioCase('PR-9521');
   const p1Modified = triggerVitalDeteriorationState(p1, { heartRate: 38, spo2: 82, systolicBp: 80, diastolicBp: 48, respiratoryRate: 32, temperatureC: 36.2 });
   const p1Reset = startScenarioCase('PR-9521');
-  const p1Clean = p1Reset.currentVitals.heartRate === 54 && p1Reset.patient.name === 'Manoj Kumar';
+  const p1Clean = p1Modified.currentVitals.heartRate === 38 && p1Reset.currentVitals.heartRate === 54 && p1Reset.patient.name === 'Manoj Kumar';
 
   const resetSuccess = t1Clean && s1Clean && p1Clean;
   if (resetSuccess) {
