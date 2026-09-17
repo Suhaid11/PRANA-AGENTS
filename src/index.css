@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'Geist Mono', monospace;
+
+    /* Palette calibrated to the reference images */
+    --prana-canvas: #EEF1F6;
+    --prana-surface: #FFFFFF;
+    --prana-blue: #0E62FE;
+    --prana-blue-dark: #0050E6;
+    --prana-blue-light: #EFF5FF;
+    --prana-slate-900: #0C1220;
+    --prana-slate-700: #334155;
+    --prana-slate-500: #64748B;
+    --prana-slate-400: #94A3B8;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--prana-canvas);
+    color: var(--prana-slate-900);
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+}
+
+/* Tabular Numerals for Telemetry */
+.font-tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Editorial Floating Surfaces from Reference Images */
+.prana-float-card {
+  background: #FFFFFF;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.05), 0 0 1px 1px rgba(226, 232, 240, 0.6);
+  position: relative;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.prana-float-pill {
+  background: #FFFFFF;
+  border-radius: 9999px;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.04);
+}
+
+.prana-active-blue-card {
+  background: #0E62FE;
+  border-radius: 28px;
+  color: #FFFFFF;
+  box-shadow: 0 20px 35px -10px rgba(14, 98, 254, 0.35);
+}
+
+/* Subtle Inner Rim Highlight */
+.prana-float-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1.5px 0 0 rgba(255, 255, 255, 0.95);
+}
+
+/* Concentric Aura Rings for Medical Centerpiece */
+@keyframes ring-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-aura {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 0.95; transform: scale(1.03); }
+}
+
+.animate-pulse-aura {
+  animation: pulse-aura 3.5s ease-in-out infinite;
+}
+
+/* Pulse animation for active telemetry wave */
+@keyframes ecg-scan {
+  0% { stroke-dashoffset: 200; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.animate-ecg-scan {
+  stroke-dasharray: 60, 20;
+  animation: ecg-scan 2.5s linear infinite;
+}
