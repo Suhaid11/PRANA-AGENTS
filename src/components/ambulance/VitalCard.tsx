@@ -19,20 +19,25 @@ export const VitalCard: React.FC<VitalCardProps> = ({
   status,
   sparkline,
 }) => {
-  // Wave calculation
-  const minVal = Math.min(...sparkline);
-  const maxVal = Math.max(...sparkline);
+  // Wave calculation with bounded coordinates and safety margins
+  const count = sparkline.length;
+  const minVal = count > 0 ? Math.min(...sparkline) : 0;
+  const maxVal = count > 0 ? Math.max(...sparkline) : 100;
   const range = maxVal - minVal || 1;
-  const width = 120;
-  const height = 32;
+  const viewWidth = 100;
+  const viewHeight = 32;
+  const padY = 4; // Safety padding so stroke never clips
+  const plotHeight = viewHeight - padY * 2;
 
-  const points = sparkline
-    .map((val, idx) => {
-      const x = (idx / (sparkline.length - 1)) * width;
-      const y = height - ((val - minVal) / range) * (height - 8) - 4;
-      return `${x},${y}`;
-    })
-    .join(' ');
+  const points = count > 1
+    ? sparkline
+        .map((val, idx) => {
+          const x = (idx / (count - 1)) * viewWidth;
+          const y = viewHeight - padY - ((val - minVal) / range) * plotHeight;
+          return `${Number(x.toFixed(1))},${Number(y.toFixed(1))}`;
+        })
+        .join(' ')
+    : `0,${viewHeight / 2} ${viewWidth},${viewHeight / 2}`;
 
   const isCritical = status === 'CRITICAL';
   const isWarning = status === 'WARNING';
@@ -40,9 +45,10 @@ export const VitalCard: React.FC<VitalCardProps> = ({
   const isSpo2 = label.toLowerCase().includes('spo2');
 
   const strokeColor = isCritical ? '#DC2626' : isWarning ? '#D97706' : '#0E62FE';
+  const isCompoundValue = String(value).length > 4;
 
   return (
-    <div className={`p-4 rounded-2xl bg-white/90 backdrop-blur-md border transition-all ${
+    <div className={`p-4 rounded-2xl bg-white/90 backdrop-blur-md border transition-all min-w-0 ${
       isCritical 
         ? 'border-rose-300 bg-rose-50/20 shadow-xs' 
         : isWarning 
@@ -50,13 +56,13 @@ export const VitalCard: React.FC<VitalCardProps> = ({
         : 'border-slate-200/70 shadow-xs'
     }`}>
       {/* Top Metadata Row: Small Label + Trend Pill */}
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-600 uppercase tracking-wider">
-          {isHeart ? <Heart className="w-3 h-3 text-rose-500 fill-current" /> : isSpo2 ? <Wind className="w-3 h-3 text-blue-500" /> : <Gauge className="w-3 h-3 text-slate-600" />}
-          <span>{label}</span>
+      <div className="flex items-center justify-between gap-2 mb-1.5 min-w-0">
+        <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-600 uppercase tracking-wider truncate">
+          {isHeart ? <Heart className="w-3 h-3 text-rose-500 fill-current shrink-0" /> : isSpo2 ? <Wind className="w-3 h-3 text-blue-500 shrink-0" /> : <Gauge className="w-3 h-3 text-slate-600 shrink-0" />}
+          <span className="truncate">{label}</span>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {trend === 'DOWN' && <TrendingDown className={`w-3 h-3 ${isCritical ? 'text-rose-600' : 'text-blue-600'}`} />}
           {trend === 'UP' && <TrendingUp className={`w-3 h-3 ${isCritical ? 'text-rose-600' : 'text-amber-600'}`} />}
           <span className={`text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase ${
@@ -72,21 +78,25 @@ export const VitalCard: React.FC<VitalCardProps> = ({
       </div>
 
       {/* Hero Numerical Value (Dominant Visual Element) + Wave */}
-      <div className="flex items-baseline justify-between gap-2">
-        <div className="flex items-baseline gap-1">
-          <span className={`text-3xl sm:text-4xl font-extrabold font-tabular tracking-tight leading-none ${
+      <div className="flex items-baseline justify-between gap-2 min-w-0">
+        <div className="flex items-baseline gap-1 shrink-0 min-w-0">
+          <span className={`${isCompoundValue ? 'text-2xl sm:text-3xl' : 'text-3xl sm:text-4xl'} font-extrabold font-tabular tracking-tight leading-none ${
             isCritical ? 'text-rose-600' : 'text-slate-900'
           }`}>
             {value}
           </span>
-          <span className="text-xs font-bold text-slate-500">
+          <span className="text-xs font-bold text-slate-500 shrink-0">
             {unit}
           </span>
         </div>
 
-        {/* Crisp Dynamic ECG Waveform */}
-        <div className="w-[110px] h-[30px] flex items-center justify-end">
-          <svg width={width} height={height} className="overflow-visible">
+        {/* Crisp Dynamic ECG Waveform — Contained Plot Region */}
+        <div className="w-20 sm:w-24 h-7 flex items-center justify-end relative overflow-hidden shrink-0">
+          <svg 
+            viewBox="0 0 100 32" 
+            preserveAspectRatio="none"
+            className="w-full h-full block"
+          >
             <polyline
               fill="none"
               stroke={strokeColor}

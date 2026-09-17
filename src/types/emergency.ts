@@ -116,6 +116,20 @@ export interface AiDecisionSupport {
   isReviewed: boolean;
 }
 
+export type CdsHandoffStatus = 'NOT_SENT' | 'SENT' | 'RECEIVED';
+
+export interface CdsDataPackage {
+  caseId: string;
+  patient: PatientProfile;
+  vitals: VitalSnapshot;
+  recentInterventions: string[];
+  observations: string[];
+  etaMinutes: number;
+  trafficDelayMinutes: number;
+  sentAt: string;
+  source: string;
+}
+
 export interface EmergencyCase {
   id: string;
   domain: EmergencyDomain;
@@ -136,5 +150,8 @@ export interface EmergencyCase {
     algorithmRationale: string;
     candidates: HospitalCandidate[];
   };
+  cdsDataStatus?: CdsHandoffStatus;
+  cdsDataPackage?: CdsDataPackage;
+  cdsDataSentAt?: string;
 }
 

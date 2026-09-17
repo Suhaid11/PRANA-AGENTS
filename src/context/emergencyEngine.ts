@@ -6,7 +6,8 @@ import type {
   HospitalCandidate, 
   AiDecisionSupport, 
   TimelineEvent,
-  AmbulanceUnit 
+  AmbulanceUnit,
+  CdsDataPackage 
 } from '../types/emergency';
 import { allScenarios, initialTraumaCase } from '../data/seedData';
 
@@ -202,6 +203,9 @@ export const startScenarioCase = (scenarioId: string): EmergencyCase => {
   const deepCopy: EmergencyCase = JSON.parse(JSON.stringify(seed));
   deepCopy.ambulance.effectiveEtaMinutes = calculateDerivedEta(deepCopy.ambulance);
   deepCopy.aiDecisionSupport = evaluateSimulationDecisionEngine(deepCopy.domain, deepCopy.currentVitals);
+  deepCopy.cdsDataStatus = 'NOT_SENT';
+  delete deepCopy.cdsDataPackage;
+  delete deepCopy.cdsDataSentAt;
   return deepCopy;
 };
 
@@ -567,6 +571,80 @@ export const continueCareInTransitState = (
       status: 'SUCCESS',
     },
     timestamp
+  );
+
+  return updatedCase;
+};
+
+export const sendCaseDataToCdsState = (
+  prevCase: EmergencyCase,
+  timestamp?: string
+): EmergencyCase => {
+  const timeStr = timestamp || new Date().toTimeString().split(' ')[0];
+
+  const shockIdx = prevCase.currentVitals.systolicBp > 0 
+    ? (prevCase.currentVitals.heartRate / prevCase.currentVitals.systolicBp).toFixed(2) 
+    : '0.00';
+
+  const observations: string[] = [
+    `Conscious status: ${prevCase.patient.consciousState} (GCS ${prevCase.patient.gcsScore}/15)`,
+    `External bleeding assessment: ${prevCase.patient.reportedBloodLoss}`,
+    `Presenting incident: ${prevCase.patient.incidentType} - ${prevCase.patient.chiefComplaint}`,
+    `Calculated Shock Index: ${shockIdx}`,
+  ];
+
+  if (prevCase.domain === 'POISONING') {
+    observations.push('Observable SLUDGE toxidrome markers: miosis, excessive salivation, bronchospasm');
+  } else if (prevCase.domain === 'SNAKEBITE') {
+    observations.push('Local hemotoxic edema spreading >10cm from bite site; 20WBCT whole blood test tube drawn');
+  } else {
+    observations.push('High-velocity blunt impact; suspected pelvic disruption and internal retroperitoneal hemorrhage');
+  }
+
+  const recordedInterventions = prevCase.timeline
+    .filter(evt => evt.actor === 'FIELD MEDIC' && evt.title.includes('Intervention Recorded'))
+    .map(evt => evt.detail);
+
+  const finalInterventions = recordedInterventions.length > 0 
+    ? recordedInterventions 
+    : [
+        prevCase.domain === 'POISONING'
+          ? 'High-flow O2 via BVM, oral secretions suctioned'
+          : prevCase.domain === 'SNAKEBITE'
+          ? 'Limb splinted at heart level, puncture site demarcated'
+          : 'Cervical collar verified, pelvic circumferential compression binder secured, 16G large-bore IV active'
+      ];
+
+  const cdsPackage: CdsDataPackage = {
+    caseId: prevCase.id,
+    patient: { ...prevCase.patient },
+    vitals: { ...prevCase.currentVitals },
+    recentInterventions: finalInterventions,
+    observations,
+    etaMinutes: calculateDerivedEta(prevCase.ambulance),
+    trafficDelayMinutes: prevCase.ambulance.trafficDelayMinutes || 0,
+    sentAt: timeStr,
+    source: `Ambulance Unit (${prevCase.ambulance.callSign || 'Echo-4'})`,
+  };
+
+  const updatedCase: EmergencyCase = {
+    ...prevCase,
+    cdsDataStatus: 'SENT',
+    cdsDataPackage: cdsPackage,
+    cdsDataSentAt: timeStr,
+    conduitStep: Math.max(prevCase.conduitStep, 2),
+  };
+
+  updatedCase.timeline = appendTimelineEvent(
+    updatedCase.timeline,
+    {
+      category: 'CLINICAL',
+      title: 'Data Package Sent: Ambulance → CDS',
+      detail: `Telemetry & clinical assessment package transmitted for tele-specialist review. HR: ${prevCase.currentVitals.heartRate} bpm, BP: ${prevCase.currentVitals.systolicBp}/${prevCase.currentVitals.diastolicBp}, SpO2: ${prevCase.currentVitals.spo2}%.`,
+      actor: 'FIELD MEDIC',
+      status: 'SUCCESS',
+    },
+    timeStr
   );
 
   return updatedCase;

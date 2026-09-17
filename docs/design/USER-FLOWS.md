@@ -11,17 +11,21 @@
 00:02 [DISPATCHED]    Ambulance Echo-4 Dispatched to Incident Locus
 00:05 [ONBOARD]       Field Paramedic Initiates Assessment; Patient Onboard
 00:07 [VITALS]        Telemetry Sensor Sync (HR: 118, SpO2: 91%, BP: 92/60)
-00:09 [AI DETECT]     AI Decision Engine detects Deterioration Pattern (Shock Index: 1.28)
-00:10 [NOTIFY DOC]    Remote Emergency Specialist Paged via PRANA Secure Telemetry
-00:11 [CLINICIAN ACT] Remote Clinician reviews vitals, orders 500ml Saline + High-flow O2
-00:12 [MATCH ENGINE]  Facility Matching Engine computes suitability (Hospital B chosen over A)
-00:13 [PRE-ALERT]     Automated Pre-Alert sent to Hospital B Emergency Department
-00:14 [ACK & PREP]    Hospital B ED Charge Nurse acknowledges; Trauma Bay 1 reserved
-00:16 [TRAFFIC DELAY] Severe Junction Congestion detected (+8 min ETA adjustment)
-00:17 [CARE CONTINUES]PRANA updates ETA; Clinician stays connected; ED team pre-warms blood
-00:22 [ARRIVED]       Ambulance arrives at Hospital B Red Bay
-00:24 [HANDOVER]      Zero-second digital bedside handover completed; Timeline archived
+00:08 [SEND TO CDS]   Paramedic transmits Patient Data Package (Vitals, Assessment, Interventions, ETA)
+00:09 [CDS RECEIVED]  Tele-Specialist Console receives transmitted snapshot (AWAITING DATA → RECEIVED)
+00:10 [AI DETECT]     AI Decision Engine detects Deterioration Pattern (Shock Index: 1.28)
+00:11 [NOTIFY DOC]    Remote Emergency Specialist Paged via PRANA Secure Telemetry
+00:12 [CLINICIAN ACT] Remote Clinician reviews vitals, orders 500ml Saline + High-flow O2
+00:13 [MATCH ENGINE]  Facility Matching Engine computes suitability (Hospital B chosen over A)
+00:14 [PRE-ALERT]     Automated Pre-Alert sent to Hospital B Emergency Department
+00:15 [ACK & PREP]    Hospital B ED Charge Nurse acknowledges; Trauma Bay 1 reserved
+00:17 [TRAFFIC DELAY] Severe Junction Congestion detected (+8 min ETA adjustment)
+00:18 [CARE CONTINUES]PRANA updates ETA; Clinician stays connected; ED team pre-warms blood
+00:23 [ARRIVED]       Ambulance arrives at Hospital B Red Bay
+00:25 [HANDOVER]      Zero-second digital bedside handover completed; Timeline archived
 ```
+
+> **Note on Prototype Execution**: The competition prototype simulates the data handoff locally and offline (`NOT_SENT` → `SENT` / `RECEIVED`) without external network dependencies.
 
 ---
 

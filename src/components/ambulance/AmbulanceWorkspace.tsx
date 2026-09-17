@@ -5,10 +5,10 @@ import { PatientCard } from './PatientCard';
 import { VitalCard } from './VitalCard';
 import { CareRail } from '../timeline/CareRail';
 import { WhyThisHospitalModal } from '../facility/WhyThisHospitalModal';
-import { Wind, Syringe, Shield, ShieldAlert, ChevronRight, CheckCircle2, Stethoscope, Building2, ArrowUpRight } from 'lucide-react';
+import { Wind, Syringe, Shield, ShieldAlert, ChevronRight, CheckCircle2, Stethoscope, Building2, ArrowUpRight, Send, Radio } from 'lucide-react';
 
 export const AmbulanceWorkspace: React.FC = () => {
-  const { activeCase, addTimelineEvent, setActiveRole } = useEmergency();
+  const { activeCase, addTimelineEvent, setActiveRole, sendCaseDataToCDS } = useEmergency();
   const { currentVitals, vitalsHistory, patient, domain, clinicianEndorsement, hospitalReadiness } = activeCase;
   const [isWhyModalOpen, setIsWhyModalOpen] = useState(false);
 
@@ -231,6 +231,85 @@ export const AmbulanceWorkspace: React.FC = () => {
               sparkline={sbpSparkline}
               referenceRange="110-130 / 70-85"
             />
+
+            {/* Clinical Decision Support Handoff Module */}
+            {activeCase.cdsDataStatus !== 'SENT' && activeCase.cdsDataStatus !== 'RECEIVED' ? (
+              <div className="p-4 rounded-3xl bg-white/90 backdrop-blur-md border border-blue-200 shadow-xs flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Radio className="w-4 h-4 text-[#0E62FE] animate-pulse" />
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-900">
+                      Clinical Decision Support
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-blue-50 text-[#0E62FE] border border-blue-200 uppercase">
+                    Package Ready
+                  </span>
+                </div>
+
+                <div className="text-xs text-slate-600">
+                  <p className="font-medium text-[11px] leading-tight mb-2 text-slate-700">
+                    Transmit current patient assessment, streaming vitals and ambulance observations to Clinical Decision Support.
+                  </p>
+                  <div className="flex flex-wrap gap-1 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+                    <span className="px-2 py-0.5 bg-slate-100 rounded-md">Vitals</span>
+                    <span className="px-2 py-0.5 bg-slate-100 rounded-md">Assessment</span>
+                    <span className="px-2 py-0.5 bg-slate-100 rounded-md">Interventions</span>
+                    <span className="px-2 py-0.5 bg-slate-100 rounded-md">ETA</span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={sendCaseDataToCDS}
+                  className="w-full py-2.5 px-4 rounded-2xl bg-[#0E62FE] hover:bg-[#0050E6] text-white text-xs font-bold transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer group"
+                >
+                  <Send className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                  <span>SEND TO CLINICAL DECISION SUPPORT</span>
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 rounded-3xl bg-white/90 backdrop-blur-md border border-emerald-200 shadow-xs flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-900">
+                      Data Sent to CDS
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-tabular uppercase">
+                    Sent {activeCase.cdsDataSentAt || '09:42:17'}
+                  </span>
+                </div>
+
+                <div className="text-[11px] text-slate-600 flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">Destination:</span>
+                    <span className="font-bold text-slate-800">Clinical Decision Support</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 font-medium">Package:</span>
+                    <span className="text-slate-700 font-semibold">Vitals · Assessment · Interventions · ETA</span>
+                  </div>
+                </div>
+
+                <div className="pt-1 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => setActiveRole('REMOTE_CLINICIAN')}
+                    className="text-[#0E62FE] hover:underline text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>View Clinician Console</span>
+                    <ArrowUpRight className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={sendCaseDataToCDS}
+                    className="text-slate-400 hover:text-slate-700 text-[10px] font-bold underline cursor-pointer"
+                    title="Re-transmit current updated telemetry package"
+                  >
+                    Resend Current Data
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Integrated PRANA Intelligence Decision Support */}
             <div className="p-4 rounded-3xl bg-white/80 backdrop-blur-md border border-slate-200/80 shadow-xs flex flex-col gap-2.5">

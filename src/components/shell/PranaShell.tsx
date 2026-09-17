@@ -15,16 +15,41 @@ import {
   ShieldAlert, 
   Activity 
 } from 'lucide-react';
-import { DemoDirector } from './DemoDirector';
 
 interface PranaShellProps {
   children: React.ReactNode;
 }
 
 export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
-  const { activeCase, activeRole, setActiveRole, resetMission, isStreaming, toggleStreaming, selectScenario, derivedEta } = useEmergency();
+  const { 
+    appMode, 
+    toggleAppMode, 
+    setAppMode, 
+    activeCase, 
+    activeRole, 
+    setActiveRole, 
+    resetMission, 
+    isStreaming, 
+    toggleStreaming, 
+    selectScenario, 
+    derivedEta 
+  } = useEmergency();
   const [isScenarioMenuOpen, setIsScenarioMenuOpen] = useState(false);
   const scenarioMenuRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard shortcut Ctrl + Shift + D to activate Demo Mode from Product Mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+        if (appMode === 'PRODUCT') {
+          e.preventDefault();
+          setAppMode('DEMO');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [appMode, setAppMode]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -261,11 +286,19 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
               )}
             </div>
 
-            {/* Offline Simulation Pill */}
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200/70 shadow-xs text-[11px] font-bold text-slate-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              <span>LOCAL / SIMULATED</span>
-            </div>
+            {/* Mode Switch: Product vs Demo */}
+            <button
+              onClick={toggleAppMode}
+              className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full border shadow-xs text-[11px] font-bold transition-all cursor-pointer ${
+                appMode === 'DEMO'
+                  ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                  : 'bg-white text-slate-600 border-slate-200/70 hover:bg-slate-50'
+              }`}
+              title={appMode === 'DEMO' ? 'Demo Mode Active — Click to switch to Product Mode' : 'Product Mode Active — Click to enable Demo Mode (Ctrl+Shift+D)'}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${appMode === 'DEMO' ? 'bg-purple-500 animate-pulse' : 'bg-emerald-500'}`} />
+              <span>{appMode === 'DEMO' ? 'DEMO MODE' : 'PRODUCT MODE'}</span>
+            </button>
 
             {/* Live Telemetry Ticker */}
             <button
@@ -299,15 +332,12 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
         {/* Minimal Editorial Footer */}
         <footer className="px-6 lg:px-12 py-3 text-xs text-slate-400 flex items-center justify-between border-t border-slate-200/40">
           <div className="text-[11px]">
-            PRANA Clinical Spatialism · Individual Software Presentation
+            PRANA Clinical Spatialism · Prehospital Emergency Coordination
           </div>
           <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
             SIMULATED SCENARIO — NOT CLINICAL DIAGNOSIS
           </div>
         </footer>
-
-        {/* Competition Demo Director Toolbar */}
-        <DemoDirector />
       </div>
     </div>
   );

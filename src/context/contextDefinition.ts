@@ -9,7 +9,12 @@ import type {
   HospitalCandidate 
 } from '../types/emergency';
 
+export type AppMode = 'PRODUCT' | 'DEMO';
+
 export interface EmergencyContextType {
+  appMode: AppMode;
+  setAppMode: (mode: AppMode) => void;
+  toggleAppMode: () => void;
   activeCase: EmergencyCase;
   activeRole: UserRole;
   setActiveRole: (role: UserRole) => void;
@@ -21,6 +26,7 @@ export interface EmergencyContextType {
   recordVitalSnapshot: (snapshot: Omit<VitalSnapshot, 'timestamp'>) => void;
   registerPatient: (patient: PatientProfile) => void;
   triggerVitalDeterioration: (newVitals: Omit<VitalSnapshot, 'timestamp'>) => void;
+  sendCaseDataToCDS: () => void;
   computeAiSignal: () => void;
   alertClinician: () => void;
   endorseProtocol: (

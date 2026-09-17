@@ -9,12 +9,13 @@ import type {
   HospitalCandidate 
 } from '../types/emergency';
 import { initialMedicalReadiness } from '../data/seedData';
-import { EmergencyContext } from './contextDefinition';
+import { EmergencyContext, type AppMode } from './contextDefinition';
 import {
   calculateDerivedEta,
   startScenarioCase,
   registerPatientState,
   triggerVitalDeteriorationState,
+  sendCaseDataToCdsState,
   computeAiSignalState,
   alertClinicianState,
   confirmClinicianProtocolState,
@@ -29,10 +30,15 @@ import {
 } from './emergencyEngine';
 
 export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [appMode, setAppMode] = useState<AppMode>('PRODUCT');
   const [activeCase, setActiveCase] = useState<EmergencyCase>(() => startScenarioCase('PR-8492'));
   const [activeRole, setActiveRole] = useState<UserRole>('FIELD_MEDIC');
   const [isStreaming, setIsStreaming] = useState<boolean>(true);
   const [medicalReadiness] = useState<MedicalReadinessItem[]>(initialMedicalReadiness);
+
+  const toggleAppMode = useCallback(() => {
+    setAppMode((prev) => (prev === 'PRODUCT' ? 'DEMO' : 'PRODUCT'));
+  }, []);
 
   // Single derived ETA source of truth (read by Ambulance, Clinician, Hospital workspaces, and Shell)
   const derivedEta = useMemo(() => {
@@ -67,6 +73,10 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const triggerVitalDeterioration = useCallback((newVitals: Omit<VitalSnapshot, 'timestamp'>) => {
     setActiveCase((prev) => triggerVitalDeteriorationState(prev, newVitals));
+  }, []);
+
+  const sendCaseDataToCDS = useCallback(() => {
+    setActiveCase((prev) => sendCaseDataToCdsState(prev));
   }, []);
 
   const computeAiSignal = useCallback(() => {
@@ -200,6 +210,9 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   return (
     <EmergencyContext.Provider
       value={{
+        appMode,
+        setAppMode,
+        toggleAppMode,
         activeCase,
         activeRole,
         setActiveRole,
@@ -211,6 +224,7 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         recordVitalSnapshot,
         registerPatient,
         triggerVitalDeterioration,
+        sendCaseDataToCDS,
         computeAiSignal,
         alertClinician,
         endorseProtocol,
@@ -228,4 +242,3 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     </EmergencyContext.Provider>
   );
 };
-

@@ -28,7 +28,17 @@
 
 ---
 
-### ACT 3 — AI Decision Support: Observable Signals
+### ACT 3 — Send Data to Clinical Decision Support
+- **Narration:**  
+  *"The paramedic does not wait for arrival to share findings. With one tap, the paramedic packages the live vitals, prehospital assessments, and current interventions into an operational snapshot transmitted directly to the remote tele-specialist. (Note: The competition prototype executes this transmission deterministically, 100% locally and offline without external network dependencies)."*
+- **Screen:** In **Ambulance Workspace** (`/ambulance`), highlight the `CLINICAL DECISION SUPPORT [PACKAGE READY]` card.
+- **Action Click:** Click `[SEND TO CLINICAL DECISION SUPPORT]`.
+- **Visual:** The button transitions to `✓ DATA SENT TO CDS [SENT HH:MM:SS]`, the Care Conduit advances to CDS, and the Care Rail logs `Data Package Sent: Ambulance → CDS`.
+- **Clinician Workspace State:** Switch to Clinician console (`/clinician`): previously showing `AWAITING AMBULANCE DATA`, it now displays `NEW AMBULANCE DATA RECEIVED` with the complete received telemetry package.
+
+---
+
+### ACT 4 — AI Decision Support: Observable Signals
 - **Narration:**  
   *"PRANA does not pretend to be a black-box 'AI doctor' or prescribe drugs autonomously. That would be irresponsible. Instead, PRANA's intelligence engine synthesizes observable physiological signals into transparent decision support."*
 - **Screen:** The Deterioration Alert surfaces on the Field & Clinician consoles:
@@ -39,17 +49,16 @@
 
 ---
 
-### ACT 4 — Remote Clinician Protocol Review
+### ACT 5 — Remote Clinician Protocol Review
 - **Narration:**  
   *"A specialist trauma physician cannot physically sit inside every ambulance. But with PRANA, their expertise is instantly accessible."*
-- **Screen:** Open **Remote Clinician Workspace** (`/clinician`).
-- **Action:** Clinician inspects the trend graphs and reviews the recommended trauma resuscitation pathway.
-- **Action Click:** Click `[CONFIRM ASSESSMENT]` and `[AUTHORIZE RESUSCITATION PROTOCOL]`.
-- **Status Confirmed:** `Authorized protocol recorded: Trauma Resuscitation Protocol A · Dr. S. Rao, MD`.
+- **Screen:** In **Remote Clinician Workspace** (`/clinician`), inspect the received patient snapshot and 10-minute multi-stream trends.
+- **Action Click:** Click `[CONFIRM]` on Authoritative Protocol Decisions.
+- **Status Confirmed:** Handshake recorded: `Protocol endorsed by Dr. Sunita Rao, MD` with synchronized handshake transmitted to Hospital Command.
 
 ---
 
-### ACT 5 — Destination: "Why This Hospital?"
+### ACT 6 — Destination: "Why This Hospital?"
 - **Narration:**  
   *"Traditional navigation apps simply route to the geographically nearest clinic. But in trauma, the closest clinic without an ICU or surgeon is a death sentence. PRANA's facility matching engine balances capabilities, live transit, and hospital readiness."*
 - **Screen:** View Receiving Facility Recommendation card:

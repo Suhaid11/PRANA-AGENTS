@@ -2,12 +2,13 @@ import React from 'react';
 import { useEmergency } from '../../context/useEmergency';
 import { CareConduit } from '../conduit/CareConduit';
 import { CareRail } from '../timeline/CareRail';
-import { Stethoscope, CheckCircle2, FileQuestion, ArrowUpRight, Check, Activity, ShieldCheck } from 'lucide-react';
+import { Stethoscope, CheckCircle2, FileQuestion, ArrowUpRight, Check, Activity, ShieldCheck, Radio, Send, AlertCircle } from 'lucide-react';
 
 export const ClinicianWorkspace: React.FC = () => {
-  const { activeCase, endorseProtocol, derivedEta } = useEmergency();
+  const { activeCase, endorseProtocol, derivedEta, setActiveRole, sendCaseDataToCDS } = useEmergency();
   const { currentVitals, vitalsHistory, patient, ambulance, domain, clinicianEndorsement } = activeCase;
 
+  const isCdsReceived = activeCase.cdsDataStatus === 'SENT' || activeCase.cdsDataStatus === 'RECEIVED';
   const currentStatus = clinicianEndorsement?.status || 'PENDING';
   const clinicianName = clinicianEndorsement?.clinicianName || 'Dr. Sunita Rao, MD';
 
@@ -38,19 +39,26 @@ export const ClinicianWorkspace: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <span className={`px-3.5 py-1.5 rounded-full text-xs font-bold border shadow-xs ${
-            currentStatus === 'CONFIRMED'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-              : currentStatus === 'ESCALATED'
-              ? 'bg-rose-50 text-rose-800 border-rose-300'
-              : 'bg-amber-50 text-amber-800 border-amber-200'
-          }`}>
-            {currentStatus === 'CONFIRMED' 
-              ? `PROTOCOL ENDORSED · ${clinicianName.toUpperCase()}` 
-              : currentStatus === 'ESCALATED'
-              ? 'ESCALATED TO SURGICAL TEAM'
-              : 'REMOTE CLINICIAN REVIEW REQUESTED'}
-          </span>
+          {!isCdsReceived ? (
+            <span className="px-3.5 py-1.5 rounded-full text-xs font-bold border shadow-xs bg-amber-50 text-amber-800 border-amber-300 flex items-center gap-1.5">
+              <Radio className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+              <span>AWAITING AMBULANCE DATA</span>
+            </span>
+          ) : (
+            <span className={`px-3.5 py-1.5 rounded-full text-xs font-bold border shadow-xs ${
+              currentStatus === 'CONFIRMED'
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : currentStatus === 'ESCALATED'
+                ? 'bg-rose-50 text-rose-800 border-rose-300'
+                : 'bg-blue-50 text-[#0E62FE] border-blue-200'
+            }`}>
+              {currentStatus === 'CONFIRMED' 
+                ? `PROTOCOL ENDORSED · ${clinicianName.toUpperCase()}` 
+                : currentStatus === 'ESCALATED'
+                ? 'ESCALATED TO SURGICAL TEAM'
+                : `AMBULANCE DATA RECEIVED (${activeCase.cdsDataSentAt || '09:42:17'})`}
+            </span>
+          )}
         </div>
       </div>
 
@@ -63,6 +71,133 @@ export const ClinicianWorkspace: React.FC = () => {
         {/* LEFT / CENTER (7 cols): Observable Signals Synthesis & Action Console */}
         <div className="lg:col-span-7 flex flex-col gap-5">
           
+          {/* CDS Incoming Data Status Card */}
+          {!isCdsReceived ? (
+            <div className="prana-float-card p-6 bg-white/95 backdrop-blur-md border border-amber-200/80 flex flex-col gap-4 shadow-sm">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <Radio className="w-5 h-5 text-amber-600 animate-pulse" />
+                  <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-tight">
+                    Clinical Decision Support · Awaiting Field Data
+                  </h3>
+                </div>
+                <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 uppercase tracking-wider">
+                  Awaiting Package
+                </span>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 py-1">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0 border border-amber-200">
+                  <AlertCircle className="w-6 h-6" />
+                </div>
+                <div className="flex flex-col gap-1 text-xs text-slate-600">
+                  <strong className="text-slate-900 font-bold text-sm">
+                    Field Medic unit {activeCase.ambulance.callSign} is conducting primary stabilization.
+                  </strong>
+                  <p className="text-slate-500 text-[11px] leading-relaxed">
+                    Live background telemetry is synchronized, but the paramedic has not yet transmitted the formal clinical assessment package. Protocol review will unlock upon package transmission.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-[11px] text-slate-400 font-medium">
+                  Target Patient: <strong className="text-slate-700">{patient.name}</strong> ({patient.age}y {patient.sex}) · Case {activeCase.id}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setActiveRole('FIELD_MEDIC')}
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Open Ambulance Workspace</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={sendCaseDataToCDS}
+                    className="px-3.5 py-1.5 rounded-xl bg-[#0E62FE] hover:bg-[#0050E6] text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    title="Simulate paramedic sending the data package now"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Receive Ambulance Data</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="prana-float-card p-6 bg-white/95 backdrop-blur-md border border-emerald-200/80 flex flex-col gap-4 shadow-sm">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-tight">
+                    New Ambulance Data Received
+                  </h3>
+                </div>
+                <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-tabular uppercase tracking-wider">
+                  Received {activeCase.cdsDataSentAt || '09:42:17'} · {activeCase.id}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                {/* Patient Profile */}
+                <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/60 flex flex-col gap-1">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase">Patient &amp; Incident</span>
+                  <div className="font-extrabold text-slate-900 text-sm">{patient.name}, {patient.age}y {patient.sex}</div>
+                  <div className="text-[11px] text-slate-600 leading-tight">{patient.incidentType}</div>
+                  <div className="text-[10px] font-bold text-slate-500 mt-0.5">GCS {patient.gcsScore}/15 · Bleeding: {patient.reportedBloodLoss}</div>
+                </div>
+
+                {/* Snapshot Vitals */}
+                <div className="p-3.5 rounded-2xl bg-blue-50/50 border border-blue-100 flex flex-col gap-1">
+                  <span className="text-[10px] font-extrabold text-[#0E62FE] uppercase">Snapshot Vitals</span>
+                  <div className="flex items-baseline justify-between font-tabular font-extrabold text-slate-900 text-sm">
+                    <span>HR {activeCase.cdsDataPackage?.vitals.heartRate ?? currentVitals.heartRate} bpm</span>
+                    <span>SpO2 {activeCase.cdsDataPackage?.vitals.spo2 ?? currentVitals.spo2}%</span>
+                  </div>
+                  <div className="flex items-baseline justify-between font-tabular text-[11px] font-bold text-slate-600">
+                    <span>BP {activeCase.cdsDataPackage?.vitals.systolicBp ?? currentVitals.systolicBp}/{activeCase.cdsDataPackage?.vitals.diastolicBp ?? currentVitals.diastolicBp} mmHg</span>
+                    <span>RR {activeCase.cdsDataPackage?.vitals.respiratoryRate ?? currentVitals.respiratoryRate}/min</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 font-medium">Derived Shock Index: {shockIndex}</div>
+                </div>
+
+                {/* Transport & Origin */}
+                <div className="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-200/60 flex flex-col gap-1">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase">Transport &amp; Source</span>
+                  <div className="font-extrabold text-slate-900 text-sm">{activeCase.cdsDataPackage?.source || `Ambulance Unit (${ambulance.callSign})`}</div>
+                  <div className="text-[11px] text-slate-600 font-medium">ETA to Destination: <span className="font-extrabold font-tabular text-[#0E62FE]">{derivedEta} mins</span></div>
+                  <div className="text-[10px] text-emerald-700 font-bold">Bi-directional telemetry link locked</div>
+                </div>
+              </div>
+
+              {/* Interventions & Observations Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1 border-t border-slate-100 text-xs">
+                <div className="p-3 rounded-2xl bg-slate-50/60 border border-slate-100 flex flex-col gap-1">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase">Prehospital Interventions Logged</span>
+                  <ul className="text-[11px] text-slate-700 space-y-1 list-disc list-inside">
+                    {(activeCase.cdsDataPackage?.recentInterventions || [
+                      'Cervical spine immobilized, pelvic compression binder secured, 16G large-bore IV active'
+                    ]).map((item, idx) => (
+                      <li key={idx} className="truncate">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-50/60 border border-slate-100 flex flex-col gap-1">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase">Field Observations Reported</span>
+                  <ul className="text-[11px] text-slate-700 space-y-1 list-disc list-inside">
+                    {(activeCase.cdsDataPackage?.observations || [
+                      `Conscious status: ${patient.consciousState} (GCS ${patient.gcsScore}/15)`,
+                      `External bleeding assessment: ${patient.reportedBloodLoss}`,
+                      `Calculated Shock Index: ${shockIndex}`,
+                    ]).map((obs, idx) => (
+                      <li key={idx} className="truncate">{obs}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Observable Signals Card */}
           <div className="prana-float-card p-6 bg-white/90 backdrop-blur-md flex flex-col gap-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">

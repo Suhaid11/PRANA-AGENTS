@@ -23,6 +23,7 @@ import {
   setTrafficDelayState,
   continueCareInTransitState,
   calculateDerivedEta,
+  sendCaseDataToCdsState,
 } from '../src/context/emergencyEngine';
 
 import type { EmergencyCase, PatientProfile, VitalSnapshot, HospitalCandidate } from '../src/types/emergency';
@@ -67,7 +68,9 @@ function runScenarioAudit(
       state.id === scenarioId &&
       state.timeline.length >= 1 &&
       state.currentVitals.heartRate > 0 &&
-      state.ambulance.baseEtaMinutes > 0;
+      state.ambulance.baseEtaMinutes > 0 &&
+      state.cdsDataStatus === 'NOT_SENT' &&
+      state.cdsDataPackage === undefined;
 
     steps.push({
       stepNumber: 1,
@@ -413,6 +416,68 @@ function runScenarioAudit(
     steps.push({ stepNumber: 14, stepName: 'TIMELINE RECORD (Care Rail Shared Log)', passed: false, message: err.message });
   }
 
+  // 15. CDS DATA HANDOFF (Ambulance → CDS Transmission & Deterministic Snapshot)
+  try {
+    // Phase A: Pre-transmission check
+    const preHandoffStatus = state.cdsDataStatus;
+    const preHandoffPackage = state.cdsDataPackage;
+    
+    // Phase B: Execute explicit deterministic handoff
+    state = sendCaseDataToCdsState(state, '09:43:00');
+    const pkg = state.cdsDataPackage;
+    const latestEvent = state.timeline[0];
+
+    // Assertions 1-13 (Package content, status, timing, care rail, conduit)
+    const statusSent = state.cdsDataStatus === 'SENT';
+    const packageExists = !!pkg;
+    const caseIdMatches = pkg?.caseId === scenarioId;
+    const patientMatches = pkg?.patient.name === state.patient.name;
+    const vitalsMatchCurrent = 
+      pkg?.vitals.heartRate === state.currentVitals.heartRate &&
+      pkg?.vitals.systolicBp === state.currentVitals.systolicBp &&
+      pkg?.vitals.spo2 === state.currentVitals.spo2;
+    const timestampExists = pkg?.sentAt === '09:43:00';
+    const sourceIsAmbulance = !!pkg?.source.includes('Ambulance');
+    const careRailContainsHandoff = latestEvent.title.includes('Data Package Sent: Ambulance → CDS');
+    const conduitAdvances = state.conduitStep >= 2;
+
+    // Assertions 14-18 (Deterministic scenario reset validation)
+    const resetCase = startScenarioCase(scenarioId);
+    const resetStatusClean = resetCase.cdsDataStatus === 'NOT_SENT';
+    const resetPackageClean = resetCase.cdsDataPackage === undefined;
+    const resetTimestampClean = resetCase.cdsDataSentAt === undefined;
+    const resetTimelineClean = !resetCase.timeline.some(e => e.title.includes('Data Package Sent: Ambulance → CDS'));
+
+    const valid = 
+      preHandoffStatus === 'NOT_SENT' &&
+      preHandoffPackage === undefined &&
+      statusSent &&
+      packageExists &&
+      caseIdMatches &&
+      patientMatches &&
+      vitalsMatchCurrent &&
+      timestampExists &&
+      sourceIsAmbulance &&
+      careRailContainsHandoff &&
+      conduitAdvances &&
+      resetStatusClean &&
+      resetPackageClean &&
+      resetTimestampClean &&
+      resetTimelineClean;
+
+    steps.push({
+      stepNumber: 15,
+      stepName: 'CDS DATA HANDOFF',
+      passed: valid,
+      message: valid 
+        ? `Deterministic CDS handoff complete: snapshot transmitted from ${pkg?.source}, Care Rail logged, conduit advanced to CDS, and reset verified clean` 
+        : 'CDS data handoff validation failed',
+      details: `Status: ${state.cdsDataStatus} · Package Case: ${pkg?.caseId} · Vitals: HR ${pkg?.vitals.heartRate}, BP ${pkg?.vitals.systolicBp}/${pkg?.vitals.diastolicBp} · Conduit Step: ${state.conduitStep}`,
+    });
+  } catch (err: any) {
+    steps.push({ stepNumber: 15, stepName: 'CDS DATA HANDOFF', passed: false, message: err.message });
+  }
+
   const allPassed = steps.every(s => s.passed);
   return {
     scenarioId,
@@ -427,27 +492,54 @@ function runScenarioAudit(
 function verifyMultiScenarioReset(): boolean {
   console.log(bold('\n--- Multi-Scenario Transition & Reset Cycle Verification ---'));
   
-  // 1. Trauma -> Reset
+  // 1. Trauma -> Modify + Handoff -> Reset
   const t1 = startScenarioCase('PR-8492');
-  const t1Modified = triggerVitalDeteriorationState(t1, { heartRate: 130, spo2: 88, systolicBp: 82, diastolicBp: 50, respiratoryRate: 28, temperatureC: 36.5 });
+  const t1Modified = sendCaseDataToCdsState(
+    triggerVitalDeteriorationState(t1, { heartRate: 130, spo2: 88, systolicBp: 82, diastolicBp: 50, respiratoryRate: 28, temperatureC: 36.5 })
+  );
   const t1Reset = startScenarioCase('PR-8492');
-  const t1Clean = t1Modified.currentVitals.heartRate === 130 && t1Reset.currentVitals.heartRate === 112 && t1Reset.timeline.length === 5;
+  const t1Clean = 
+    t1Modified.currentVitals.heartRate === 130 && 
+    t1Modified.cdsDataStatus === 'SENT' &&
+    t1Reset.currentVitals.heartRate === 112 && 
+    t1Reset.cdsDataStatus === 'NOT_SENT' &&
+    t1Reset.cdsDataPackage === undefined &&
+    t1Reset.cdsDataSentAt === undefined &&
+    t1Reset.timeline.length === 5;
 
-  // 2. Snakebite -> Reset
+  // 2. Snakebite -> Modify + Handoff -> Reset
   const s1 = startScenarioCase('PR-7104');
-  const s1Modified = triggerVitalDeteriorationState(s1, { heartRate: 120, spo2: 94, systolicBp: 100, diastolicBp: 62, respiratoryRate: 22, temperatureC: 37.2 });
+  const s1Modified = sendCaseDataToCdsState(
+    triggerVitalDeteriorationState(s1, { heartRate: 120, spo2: 94, systolicBp: 100, diastolicBp: 62, respiratoryRate: 22, temperatureC: 37.2 })
+  );
   const s1Reset = startScenarioCase('PR-7104');
-  const s1Clean = s1Modified.currentVitals.heartRate === 120 && s1Reset.currentVitals.heartRate === 106 && s1Reset.patient.name === 'Sunita Gowda';
+  const s1Clean = 
+    s1Modified.currentVitals.heartRate === 120 && 
+    s1Modified.cdsDataStatus === 'SENT' &&
+    s1Reset.currentVitals.heartRate === 106 && 
+    s1Reset.cdsDataStatus === 'NOT_SENT' &&
+    s1Reset.cdsDataPackage === undefined &&
+    s1Reset.cdsDataSentAt === undefined &&
+    s1Reset.patient.name === 'Sunita Gowda';
 
-  // 3. Poisoning -> Reset
+  // 3. Poisoning -> Modify + Handoff -> Reset
   const p1 = startScenarioCase('PR-9521');
-  const p1Modified = triggerVitalDeteriorationState(p1, { heartRate: 38, spo2: 82, systolicBp: 80, diastolicBp: 48, respiratoryRate: 32, temperatureC: 36.2 });
+  const p1Modified = sendCaseDataToCdsState(
+    triggerVitalDeteriorationState(p1, { heartRate: 38, spo2: 82, systolicBp: 80, diastolicBp: 48, respiratoryRate: 32, temperatureC: 36.2 })
+  );
   const p1Reset = startScenarioCase('PR-9521');
-  const p1Clean = p1Modified.currentVitals.heartRate === 38 && p1Reset.currentVitals.heartRate === 54 && p1Reset.patient.name === 'Manoj Kumar';
+  const p1Clean = 
+    p1Modified.currentVitals.heartRate === 38 && 
+    p1Modified.cdsDataStatus === 'SENT' &&
+    p1Reset.currentVitals.heartRate === 54 && 
+    p1Reset.cdsDataStatus === 'NOT_SENT' &&
+    p1Reset.cdsDataPackage === undefined &&
+    p1Reset.cdsDataSentAt === undefined &&
+    p1Reset.patient.name === 'Manoj Kumar';
 
   const resetSuccess = t1Clean && s1Clean && p1Clean;
   if (resetSuccess) {
-    console.log(green('✓ Reset Cycle Verified: TRAUMA → RESET → SNAKEBITE → RESET → POISONING → RESET without browser reload.'));
+    console.log(green('✓ Reset Cycle Verified: TRAUMA → RESET → SNAKEBITE → RESET → POISONING → RESET without browser reload. Zero cross-scenario leakage.'));
   } else {
     console.log(red('✗ Reset Cycle Failed: state persisted between resets.'));
   }
@@ -457,7 +549,7 @@ function verifyMultiScenarioReset(): boolean {
 // Main Execution
 export function runFullAudit() {
   console.log(bold('========================================================================================'));
-  console.log(bold('  PRANA — Day 2 Integration Audit: 14-Step End-to-End Acceptance Test Harness'));
+  console.log(bold('  PRANA — Full Prototype Integration Audit: 15-Step End-to-End Acceptance Test Harness'));
   console.log(bold('========================================================================================'));
 
   const results: ScenarioAuditResult[] = [];
@@ -497,7 +589,7 @@ export function runFullAudit() {
 
   // Comprehensive Table Display
   console.log('\n' + bold('----------------------------------------------------------------------------------------'));
-  console.log(bold('  FINAL DAY 2 AUDIT PASS/FAIL MATRIX (14 Steps × 3 Scenarios = 42 Assertions)'));
+  console.log(bold('  FINAL AUDIT PASS/FAIL MATRIX (15 Steps × 3 Scenarios = 45 Assertions)'));
   console.log(bold('----------------------------------------------------------------------------------------'));
 
   let totalSteps = 0;
@@ -512,7 +604,7 @@ export function runFullAudit() {
   );
   console.log('='.repeat(84));
 
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 15; i++) {
     const stepNum = i + 1;
     const stepName = results[0].steps[i].stepName;
     const tPass = results[0].steps[i]?.passed;
@@ -546,11 +638,11 @@ export function runFullAudit() {
   console.log('\n' + bold('Summary per Scenario:'));
   results.forEach(r => {
     const icon = r.allPassed ? green('✓ PASS') : red('✗ FAIL');
-    console.log(`  ${icon} [${r.scenarioId}] ${r.domain} (${r.patientName}): ${r.steps.filter(s => s.passed).length}/14 steps`);
+    console.log(`  ${icon} [${r.scenarioId}] ${r.domain} (${r.patientName}): ${r.steps.filter(s => s.passed).length}/15 steps`);
   });
 
-  if (passedSteps === 42 && resetOk) {
-    console.log(green(bold('\n★★★ ALL 42 ACCEPTANCE GATES PASSED — DAY 2 STATE MACHINE INTEGRATION PROVEN ★★★\n')));
+  if (passedSteps === 45 && resetOk) {
+    console.log(green(bold('\n★★★ ALL 45 ACCEPTANCE GATES PASSED — FULL PROTOTYPE STATE MACHINE INTEGRATION PROVEN ★★★\n')));
     return true;
   } else {
     console.log(red(bold(`\n⚠ AUDIT INCOMPLETE: ${totalSteps - passedSteps} assertion(s) failed.\n`)));

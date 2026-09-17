@@ -33,15 +33,15 @@
 | Act | Module | Presenter Action | Spoken Focus / Punchline |
 | :--- | :--- | :--- | :--- |
 | **ACT 1** (0:00) | **Mission Portal** | Display hero: *"Where the Journey Becomes Care"*. Point to 3 scenarios and offline indicator. | *"Ambulance transit has historically been dead time. PRANA converts it into active clinical stabilization."* |
-| **ACT 2** (1:00) | **Ambulance Field** | Click `[Launch TRAUMA Case]`. Point to Patient Card (Rahul Verma, 34M) and Care Conduit centerpiece. | *"Patient in transit. The Care Conduit links Paramedic, Tele-Specialist, and Receiving Hospital."* |
-| **ACT 3** (2:00) | **Ambulance Field** | In Demo Director, click `[Act 3: Deteriorate & AI Signal]`. | *"Tachycardia worsens (126 bpm), pulse pressure narrows. PRANA detects compensated hemorrhagic shock."* |
-| **ACT 4** (3:00) | **Clinician Review** | Switch to Clinician console. Show Observable Signals. Click `[CONFIRM]`. | *"AI recommends, but a human physician decides. Dr. Sunita Rao confirms trauma resuscitation protocol."* |
-| **ACT 5** (4:30) | **Hospital Command** | Show "Why This Hospital?" breakdown (40/30/30). In Demo Director, click `[Act 5: Mutate Facility Match]`. | *"PRANA does not simply route to the closest clinic. In this simulated profile, Manipal's Level-1 trauma surgical capability outweighs a 3-minute transit difference."* |
-| **ACT 6** (5:30) | **Hospital Command** | View arrival window. Click `[Confirm Bay Ready]`. | *"The hospital isn't waiting for the stretcher. Bay 1 is sterile and verified 14 minutes before arrival."* |
-| **ACT 7** (6:30) | **Ambulance Field** | In Demo Director, click `[Act 7: Traffic Congestion +8m]`. | *"Urban reality strikes: Ring Road gridlock. ETA jumps from 14 to 22 mins. But watch what happens."* |
-| **ACT 8** (7:30) | **Ambulance Field** | Show calm banner: `TRANSPORT DELAY · CARE CONTINUES`. | *"The wheels are delayed, but care does not stop. Telemetry streams, clinician stays linked, hospital prepares."* |
-| **ACT 9** (8:30) | **Care Rail** | Click `[Audit Ledger]` on Care Continuity Rail. Show chronological milestones. | *"Every vital change, clinician endorsement, and delay is recorded in an immutable prehospital care rail."* |
-| **ACT 10** (9:30) | **Mission Portal** | Click `[Reset Case]` or switch to Snakebite/Poisoning to show multi-scenario breadth. | *"The ambulance didn't become faster. The care became smarter. Thank you. We welcome your questions."* |
+| **ACT 2** (1:00) | **Ambulance Field** | Click `[Launch TRAUMA Case]`. Point to Patient Card (Rahul Verma, 34M), contained BP display, and Care Conduit. | *"Patient in transit. The Care Conduit links Paramedic, Tele-Specialist, and Receiving Hospital."* |
+| **ACT 3** (2:00) | **Ambulance Field** | Click `[SEND TO CLINICAL DECISION SUPPORT]` (or Act 3 in Demo Director). | *"Data does not magically appear. The paramedic explicitly transmits the clinical snapshot: vitals, assessment, and interventions."* |
+| **ACT 4** (3:00) | **Ambulance Field** | In Demo Director, click `[Act 4: Deteriorate & AI]`. Point to dynamic signals. | *"Tachycardia worsens (126 bpm), pulse pressure narrows. PRANA detects compensated hemorrhagic shock."* |
+| **ACT 5** (4:00) | **Clinician Review** | Switch to Clinician console. See received snapshot. Click `[CONFIRM]`. | *"AI recommends, but a human physician decides. Dr. Sunita Rao confirms trauma resuscitation protocol."* |
+| **ACT 6** (5:00) | **Hospital Command** | Show "Why This Hospital?" breakdown (40/30/30). In Demo Director, click `[Act 6: Mutate Facility]`. | *"PRANA does not simply route to the closest clinic. In this simulated profile, Manipal's Level-1 trauma surgical capability outweighs a 3-minute transit difference."* |
+| **ACT 7** (6:00) | **Hospital Command** | In Demo Director, click `[Act 7: Pre-Alert ED]`. | *"Pre-alert transmitted directly to Manipal Hospital Emergency Department with instant acknowledgment."* |
+| **ACT 8** (7:00) | **Ambulance Field** | In Demo Director, click `[Act 8: Traffic +8m]`. Show banner: `TRANSPORT DELAY · CARE CONTINUES`. | *"The wheels are delayed (+8m), but care does not stop. Telemetry streams, clinician stays linked, hospital arrival updates to 22m."* |
+| **ACT 9** (8:00) | **Hospital Command** | In Demo Director, click `[Act 9: Confirm Bay Ready]`. Show sterile bay verified. | *"The hospital isn't waiting for the stretcher. Bay 1 is sterile and verified before arrival."* |
+| **ACT 10** (9:00) | **Shell / Portal** | Click `[Act 10: Bedside Handover]` & `[Reset Case]`. | *"The ambulance didn't become faster. The care became smarter. Thank you. We welcome your questions."* |
 
 ---
 

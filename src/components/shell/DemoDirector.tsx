@@ -12,13 +12,15 @@ import {
   ChevronUp, 
   ChevronDown,
   Sparkles,
-  Shuffle
+  Shuffle,
+  Send,
 } from 'lucide-react';
 
 export const DemoDirector: React.FC = () => {
   const { 
     activeCase, 
     triggerVitalDeterioration, 
+    sendCaseDataToCDS,
     computeAiSignal, 
     endorseProtocol, 
     recalculateFacilityMatching,
@@ -57,22 +59,28 @@ export const DemoDirector: React.FC = () => {
     }
   };
 
-  // Act 3: Deteriorate Vitals & Trigger Dynamic AI Signal
-  const handleAct3Deteriorate = () => {
-    const vitals = getDeteriorationVitals();
-    triggerVitalDeterioration(vitals);
-    computeAiSignal();
+  // Act 3: Send Ambulance Data to CDS
+  const handleAct3SendData = () => {
+    sendCaseDataToCDS();
     setCurrentAct(3);
   };
 
-  // Act 4: Clinician Endorsement
-  const handleAct4ClinicianEndorse = () => {
-    endorseProtocol('CONFIRMED');
+  // Act 4: Deteriorate Vitals & Trigger Dynamic AI Signal
+  const handleAct4Deteriorate = () => {
+    const vitals = getDeteriorationVitals();
+    triggerVitalDeterioration(vitals);
+    computeAiSignal();
     setCurrentAct(4);
   };
 
-  // Act 5: Mutate Facility Match (Live Capacity Shift)
-  const handleAct5MutateFacility = () => {
+  // Act 5: Clinician Endorsement
+  const handleAct5ClinicianEndorse = () => {
+    endorseProtocol('CONFIRMED');
+    setCurrentAct(5);
+  };
+
+  // Act 6: Mutate Facility Match (Live Capacity Shift)
+  const handleAct6MutateFacility = () => {
     const primary = activeCase.facilityMatching?.candidates.find((c) => c.isPrimary);
     const mutatedCandidates: HospitalCandidate[] = (activeCase.facilityMatching?.candidates || []).map((c) => {
       if (c.id === primary?.id) {
@@ -84,32 +92,32 @@ export const DemoDirector: React.FC = () => {
       return c;
     });
     recalculateFacilityMatching(mutatedCandidates);
-    setCurrentAct(5);
-  };
-
-  // Act 6: Hospital Pre-Alert Dispatch
-  const handleAct6PreAlert = () => {
-    dispatchHospitalPreAlert();
     setCurrentAct(6);
   };
 
-  // Act 7: Traffic Congestion (+8 Minutes)
-  const handleAct7TrafficDelay = () => {
-    setTrafficDelay(8);
-    continueCare('Corridor congestion detected on Ring Road. Monitoring & treatment continue.');
+  // Act 7: Hospital Pre-Alert Dispatch
+  const handleAct7PreAlert = () => {
+    dispatchHospitalPreAlert();
     setCurrentAct(7);
   };
 
-  // Act 8: Confirm Hospital Bay Sterile & Ready
-  const handleAct8BayReady = () => {
-    confirmHospitalBay('Trauma Resuscitation Bay 1 (Sterile)');
+  // Act 8: Traffic Congestion (+8 Minutes)
+  const handleAct8TrafficDelay = () => {
+    setTrafficDelay(8);
+    continueCare('Corridor congestion detected on Ring Road. Monitoring & treatment continue.');
     setCurrentAct(8);
   };
 
-  // Act 9: Bedside Handover
-  const handleAct9Handover = () => {
-    continueCare('Bedside clinical handover complete. Continuous timeline log archived.');
+  // Act 9: Confirm Hospital Bay Sterile & Ready
+  const handleAct9BayReady = () => {
+    confirmHospitalBay('Trauma Resuscitation Bay 1 (Sterile)');
     setCurrentAct(9);
+  };
+
+  // Act 10: Bedside Handover
+  const handleAct10Handover = () => {
+    continueCare('Bedside clinical handover complete. Continuous timeline log archived.');
+    setCurrentAct(10);
   };
 
   // Reset to Clean Scenario Seed State
@@ -174,99 +182,115 @@ export const DemoDirector: React.FC = () => {
           </div>
 
           {/* 10-Act Sequence Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-bold">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-bold">
             
-            {/* Act 3: Deteriorate Vitals */}
+            {/* Act 3: Send Data to CDS */}
             <button
-              onClick={handleAct3Deteriorate}
-              className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+              onClick={handleAct3SendData}
+              className={`p-2 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                 currentAct === 3
-                  ? 'bg-rose-950/60 border-rose-600 text-rose-200 ring-1 ring-rose-500'
+                  ? 'bg-blue-950/60 border-blue-600 text-blue-200 ring-1 ring-blue-500'
                   : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-slate-400 font-mono">ACT 3</span>
-                <Activity className="w-3.5 h-3.5 text-rose-400" />
+                <Send className="w-3.5 h-3.5 text-blue-400" />
               </div>
-              <span className="text-[11px] font-extrabold leading-tight">Deteriorate & AI Signal</span>
+              <span className="text-[11px] font-extrabold leading-tight">Send Data to CDS</span>
             </button>
 
-            {/* Act 4: Clinician Endorse */}
+            {/* Act 4: Deteriorate Vitals */}
             <button
-              onClick={handleAct4ClinicianEndorse}
-              className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+              onClick={handleAct4Deteriorate}
+              className={`p-2 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                 currentAct === 4
-                  ? 'bg-blue-950/60 border-blue-600 text-blue-200 ring-1 ring-blue-500'
+                  ? 'bg-rose-950/60 border-rose-600 text-rose-200 ring-1 ring-rose-500'
                   : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-slate-400 font-mono">ACT 4</span>
-                <Stethoscope className="w-3.5 h-3.5 text-blue-400" />
+                <Activity className="w-3.5 h-3.5 text-rose-400" />
               </div>
-              <span className="text-[11px] font-extrabold leading-tight">Clinician Endorse</span>
+              <span className="text-[11px] font-extrabold leading-tight">Deteriorate & AI</span>
             </button>
 
-            {/* Act 5: Mutate Facility Match */}
+            {/* Act 5: Clinician Endorse */}
             <button
-              onClick={handleAct5MutateFacility}
-              className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+              onClick={handleAct5ClinicianEndorse}
+              className={`p-2 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                 currentAct === 5
-                  ? 'bg-purple-950/60 border-purple-600 text-purple-200 ring-1 ring-purple-500'
-                  : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-400 font-mono">ACT 5</span>
-                <Shuffle className="w-3.5 h-3.5 text-purple-400" />
-              </div>
-              <span className="text-[11px] font-extrabold leading-tight">Mutate Facility Match</span>
-            </button>
-
-            {/* Act 6: Hospital Pre-Alert */}
-            <button
-              onClick={handleAct6PreAlert}
-              className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all ${
-                currentAct === 6
                   ? 'bg-blue-950/60 border-blue-600 text-blue-200 ring-1 ring-blue-500'
                   : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-400 font-mono">ACT 6</span>
-                <Building2 className="w-3.5 h-3.5 text-blue-400" />
+                <span className="text-[10px] text-slate-400 font-mono">ACT 5</span>
+                <Stethoscope className="w-3.5 h-3.5 text-blue-400" />
               </div>
-              <span className="text-[11px] font-extrabold leading-tight">Dispatch Pre-Alert</span>
+              <span className="text-[11px] font-extrabold leading-tight">Clinician Endorse</span>
             </button>
 
-            {/* Act 7: Traffic Congestion */}
+            {/* Act 6: Mutate Facility Match */}
             <button
-              onClick={handleAct7TrafficDelay}
-              className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+              onClick={handleAct6MutateFacility}
+              className={`p-2 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+                currentAct === 6
+                  ? 'bg-purple-950/60 border-purple-600 text-purple-200 ring-1 ring-purple-500'
+                  : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-400 font-mono">ACT 6</span>
+                <Shuffle className="w-3.5 h-3.5 text-purple-400" />
+              </div>
+              <span className="text-[11px] font-extrabold leading-tight">Mutate Facility</span>
+            </button>
+
+            {/* Act 7: Hospital Pre-Alert */}
+            <button
+              onClick={handleAct7PreAlert}
+              className={`p-2 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                 currentAct === 7
-                  ? 'bg-amber-950/60 border-amber-600 text-amber-200 ring-1 ring-amber-500'
+                  ? 'bg-blue-950/60 border-blue-600 text-blue-200 ring-1 ring-blue-500'
                   : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-slate-400 font-mono">ACT 7</span>
-                <Car className="w-3.5 h-3.5 text-amber-400" />
+                <Building2 className="w-3.5 h-3.5 text-blue-400" />
               </div>
-              <span className="text-[11px] font-extrabold leading-tight">Traffic Congestion +8m</span>
+              <span className="text-[11px] font-extrabold leading-tight">Pre-Alert ED</span>
             </button>
 
-            {/* Act 8: Bay Ready */}
+            {/* Act 8: Traffic Congestion */}
             <button
-              onClick={handleAct8BayReady}
-              className={`p-2.5 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+              onClick={handleAct8TrafficDelay}
+              className={`p-2 rounded-xl border text-left flex flex-col gap-1 transition-all ${
                 currentAct === 8
-                  ? 'bg-emerald-950/60 border-emerald-600 text-emerald-200 ring-1 ring-emerald-500'
+                  ? 'bg-amber-950/60 border-amber-600 text-amber-200 ring-1 ring-amber-500'
                   : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
               }`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-slate-400 font-mono">ACT 8</span>
+                <Car className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+              <span className="text-[11px] font-extrabold leading-tight">Traffic +8m</span>
+            </button>
+
+            {/* Act 9: Bay Ready */}
+            <button
+              onClick={handleAct9BayReady}
+              className={`p-2 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+                currentAct === 9
+                  ? 'bg-emerald-950/60 border-emerald-600 text-emerald-200 ring-1 ring-emerald-500'
+                  : 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-200'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-slate-400 font-mono">ACT 9</span>
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
               </div>
               <span className="text-[11px] font-extrabold leading-tight">Confirm Bay Ready</span>
@@ -276,11 +300,11 @@ export const DemoDirector: React.FC = () => {
           {/* Bottom Bar: Quick Reset & Clean Handover */}
           <div className="flex items-center justify-between pt-2 border-t border-slate-800/80 text-[11px]">
             <button
-              onClick={handleAct9Handover}
+              onClick={handleAct10Handover}
               className="px-3 py-1 rounded-lg bg-emerald-700/80 hover:bg-emerald-700 text-white font-bold flex items-center gap-1.5 transition-colors"
             >
               <Play className="w-3 h-3" />
-              <span>Act 9: Bedside Handover</span>
+              <span>Act 10: Bedside Handover</span>
             </button>
 
             <button

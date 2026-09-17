@@ -80,7 +80,7 @@ export const MissionPortal: React.FC = () => {
               PRANA MISSION PORTAL · EMERGENCY SIMULATION
             </span>
             <span className="text-xs text-slate-400 font-semibold hidden sm:inline">
-              15-Minute Individual Solution Showcase
+              High-Density Emergency Coordination Showcase
             </span>
           </div>
 
