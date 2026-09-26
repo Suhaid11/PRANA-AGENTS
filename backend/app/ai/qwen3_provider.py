@@ -232,6 +232,53 @@ class Qwen3LocalProvider(AIProvider):
         status = self.check_status()
         return status.available
 
+    def verify_model_identity(self) -> tuple[bool, str, Optional[str]]:
+        """
+        Actively verifies the model identity via Ollama /api/show.
+        Inspects:
+        - family & architecture
+        - parameter count (e.g. 494M vs 8B)
+        - base model name
+        Returns: (is_verified, identity_description, failure_reason)
+        """
+        if self.runtime in ("mock", "in_process"):
+            return True, f"Embedded {self.model_name}", None
+
+        if self.runtime != "ollama":
+            return False, f"External {self.runtime} ({self.model_name})", "External runtime model identity unverified"
+
+        try:
+            req = urllib.request.Request(
+                f"{self.base_url}/api/show",
+                data=json.dumps({"model": self.model_name}).encode("utf-8"),
+                headers={"Content-Type": "application/json", "User-Agent": "PRANA-Qwen3/2.0"},
+                method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            details = data.get("details", {})
+            model_info = data.get("model_info", {})
+            param_size = details.get("parameter_size") or model_info.get("general.size_label") or "Unknown"
+            base_model = model_info.get("general.base_model.0.name") or details.get("family") or "Unknown"
+            arch = model_info.get("general.architecture") or details.get("family") or "Unknown"
+
+            # Check for retagged sub-scale model (e.g. 0.5B / 494M model retagged as qwen3:8b)
+            if "0.5b" in str(param_size).lower() or "494" in str(param_size) or "0.5b" in str(base_model).lower() or (arch == "qwen2" and "8b" not in str(param_size).lower() and "8." not in str(param_size)):
+                return (
+                    False,
+                    f"Unverified: Retagged {base_model} ({param_size}, {arch} arch)",
+                    f"Local model '{self.model_name}' is retagged {base_model} ({param_size}), not verified Qwen3 (>=7B). Fallback active to prevent clinical data loss."
+                )
+
+            # Verified genuine Qwen3 / Qwen2.5 7B+ model
+            if ("8b" in self.model_name.lower() or "7b" in self.model_name.lower() or "qwen3" in str(arch).lower()):
+                return True, f"Qwen3 ({self.model_name}, {param_size})", None
+
+            return False, f"Model Identity Unverified ({self.model_name}: {param_size})", f"Parameter size {param_size} does not meet verified Qwen3 specifications."
+        except Exception as exc:
+            return False, "Model Unreachable", f"Failed to probe Ollama /api/show: {exc}"
+
     # ================================================================
     # REAL OLLAMA INFERENCE — Phase 22
     # ================================================================
@@ -241,26 +288,29 @@ class Qwen3LocalProvider(AIProvider):
         system_prompt: str,
         user_content: str,
         temperature: float = 0.1,
+        schema: Optional[dict] = None,
     ) -> Optional[str]:
         """
         Sends a real chat completion request to the local Ollama runtime.
         Returns the model's response content string, or None on failure.
 
-        Uses Ollama's OpenAI-compatible /v1/chat/completions endpoint.
+        When schema is provided and runtime is ollama, uses Ollama's structured outputs format.
         """
         try:
             if self.runtime == "ollama":
                 url = f"{self.base_url}/api/chat"
+                format_option = schema if schema else "json"
                 payload = {
                     "model": self.model_name,
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_content},
                     ],
-                    "format": "json",
+                    "format": format_option,
                     "stream": False,
                     "options": {
                         "temperature": temperature,
+                        "num_ctx": 4096,
                     },
                 }
             else:

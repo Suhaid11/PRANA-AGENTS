@@ -1,6 +1,7 @@
 import React from 'react';
 import { AuthProvider } from './auth/AuthContext';
 import { EmergencyProvider } from './context/EmergencyContext';
+import { ToastProvider } from './context/ToastContext';
 import { useEmergency } from './context/useEmergency';
 import { PranaShell } from './components/shell/PranaShell';
 import { MissionPortal } from './components/portal/MissionPortal';
@@ -31,7 +32,9 @@ export function App() {
   return (
     <AuthProvider>
       <EmergencyProvider>
-        <AppContent />
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
       </EmergencyProvider>
     </AuthProvider>
   );

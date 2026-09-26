@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.domain.models import TimelineEventModel, EmergencyCaseModel
 
+import uuid
+
 def append_event(
     db: Session,
     case_id: str,
@@ -21,7 +23,7 @@ def append_event(
     Never updates in-place.
     """
     now_ts = timestamp or datetime.now(timezone.utc).strftime("%H:%M:%S")
-    event_id = f"evt-{int(time.time() * 1000)}-{case_id}"
+    event_id = f"evt-{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}-{case_id}"
 
     case = db.query(EmergencyCaseModel).filter(EmergencyCaseModel.id == case_id).first()
     new_version = ((case.current_version or 0) + 1) if case else 1

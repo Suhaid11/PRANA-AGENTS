@@ -1,5 +1,5 @@
-import { apiClient } from './client';
-import type { PrehospitalHandoverPackage } from '../../types/emergency';
+﻿import { apiClient } from './client';
+import type { PrehospitalHandoverPackage, EmergencyCase } from '../../types/emergency';
 
 export interface HandoverVerifyResult {
   match: boolean;
@@ -101,7 +101,7 @@ export async function downloadHandoverExport(
   }
 
   const blob = await response.blob();
-  const filename = format === 'fhir' 
+  const filename = format === 'fhir'
     ? `PRANA_Handover_${caseId}_${packageId}_FHIR_R4.json`
     : `PRANA_Handover_${caseId}_${packageId}.json`;
 
@@ -113,4 +113,30 @@ export async function downloadHandoverExport(
   a.click();
   window.URL.revokeObjectURL(url);
   document.body.removeChild(a);
+}
+
+/**
+ * Field Medic initiates formal transfer-of-care patient handover at receiving facility.
+ */
+export async function submitHandoverInitiate(
+  caseId: string,
+  payload?: { notes?: string; timestamp?: string }
+): Promise<EmergencyCase> {
+  return apiClient<EmergencyCase>(`/cases/${caseId}/handover/initiate`, {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+/**
+ * Receiving Emergency Department accepts transfer of care, concluding the transit mission.
+ */
+export async function submitHandoverAccept(
+  caseId: string,
+  payload?: { notes?: string; timestamp?: string }
+): Promise<EmergencyCase> {
+  return apiClient<EmergencyCase>(`/cases/${caseId}/handover/accept`, {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
+  });
 }

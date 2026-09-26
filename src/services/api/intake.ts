@@ -23,7 +23,8 @@ export async function submitVoiceIntake(
   return apiClient<CaseDraft>('/cases/intake/voice', {
     method: 'POST',
     body: formData,
-  });
+    timeoutMs: 60000,
+  } as any);
 }
 
 export async function submitTextIntake(
@@ -33,7 +34,8 @@ export async function submitTextIntake(
   return apiClient<CaseDraft>('/cases/intake/text', {
     method: 'POST',
     body: JSON.stringify({ text, sourceName }),
-  });
+    timeoutMs: 60000,
+  } as any);
 }
 
 export async function submitFileIntake(file: File): Promise<CaseDraft> {
@@ -43,7 +45,8 @@ export async function submitFileIntake(file: File): Promise<CaseDraft> {
   return apiClient<CaseDraft>('/cases/intake/file', {
     method: 'POST',
     body: formData,
-  });
+    timeoutMs: 60000,
+  } as any);
 }
 
 export async function getCaseDraft(draftId: string): Promise<CaseDraft> {
@@ -77,5 +80,6 @@ export async function confirmCaseDraft(
   return apiClient<EmergencyCase>(`/cases/intake/${draftId}/confirm`, {
     method: 'POST',
     body: JSON.stringify(options || {}),
-  });
+    timeoutMs: 30000,
+  } as any);
 }

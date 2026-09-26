@@ -1,28 +1,44 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useEmergency } from '../../context/useEmergency';
+import { useToast } from '../../context/ToastContext';
 import { CareConduit } from '../conduit/CareConduit';
 import { PatientCard } from './PatientCard';
 import { VitalCard } from './VitalCard';
 import { CareRail } from '../timeline/CareRail';
 import { WhyThisHospitalModal } from '../facility/WhyThisHospitalModal';
-import { 
-  Wind, 
-  Syringe, 
-  Shield, 
-  ChevronRight, 
-  ArrowUpRight, 
-  Radio, 
+import { PrehospitalHandoverPanel } from '../handover/PrehospitalHandoverPanel';
+import {
+  Wind,
+  Syringe,
+  Shield,
+  ChevronRight,
+  ArrowUpRight,
+  Radio,
   Sparkles,
   Building2,
-  CheckCircle2
+  CheckCircle2,
+  FileText
 } from 'lucide-react';
 
 export const AmbulanceWorkspace: React.FC = () => {
-  const { activeCase, addTimelineEvent, setActiveRole, submitFieldResponse, dismissFieldDataRequest } = useEmergency();
+  const {
+    activeCase,
+    addTimelineEvent,
+    setActiveRole,
+    submitFieldResponse,
+    dismissFieldDataRequest,
+    markPatientArrived,
+    initiateHandover,
+    isHandoverModalOpen,
+    setIsHandoverModalOpen
+  } = useEmergency();
+  const { showToast } = useToast();
   const { currentVitals, vitalsHistory, patient, domain, clinicianEndorsement } = activeCase;
   const [isWhyModalOpen, setIsWhyModalOpen] = useState(false);
   const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
+  const [isHandoverConfirmModalOpen, setIsHandoverConfirmModalOpen] = useState(false);
   const [customResponseText, setCustomResponseText] = useState('');
+  const [handoverNotes, setHandoverNotes] = useState('Verbal SBAR handover given to ED resuscitation team. Vital signs and interventions verified.');
 
   // Sparkline rolling histories (last 10 snapshots)
   const hrSparkline = vitalsHistory.map((v) => v.heartRate);
@@ -34,6 +50,13 @@ export const AmbulanceWorkspace: React.FC = () => {
   const pulsePressure = currentVitals.systolicBp - currentVitals.diastolicBp;
 
   const isClinicianEndorsed = clinicianEndorsement?.status === 'CONFIRMED';
+  const isFacilityConfirmed = activeCase.conduitStep >= 4 || Boolean(activeCase.hospitalReadiness?.isPreAlertDispatched);
+  const primaryCandidate = activeCase.facilityMatching?.candidates?.find(c => c.isPrimary) || activeCase.facilityMatching?.candidates?.[0];
+  const displayFacilityName = isFacilityConfirmed
+    ? activeCase.ambulance.assignedHospital
+    : (activeCase.ambulance.assignedHospital && activeCase.ambulance.assignedHospital !== 'Awaiting Facility Selection'
+      ? activeCase.ambulance.assignedHospital
+      : (primaryCandidate ? primaryCandidate.name : 'Awaiting Facility Selection'));
 
   // Paramedic logs prehospital intervention — immediately updates shared state and timeline
   const handleLogIntervention = (actionLabel: string, detailText: string) => {
@@ -49,7 +72,7 @@ export const AmbulanceWorkspace: React.FC = () => {
   return (
     <>
       <div className="flex flex-col gap-6 py-2">
-        
+
         {/* CLINICAL DATA REQUEST ALERT BANNER FROM REMOTE SPECIALIST */}
         {activeCase.pendingDataRequest && activeCase.pendingDataRequest.status === 'PENDING' && (
           <div className="p-4 rounded-3xl bg-amber-500/10 border-2 border-amber-500/30 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-3 shadow-lg shadow-amber-500/5">
@@ -106,7 +129,7 @@ export const AmbulanceWorkspace: React.FC = () => {
 
         {/* 1. Main Spatial Canvas: Fluid Asymmetric Command Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 xl:gap-7 items-start">
-          
+
           {/* LEFT COLUMN: Editorial Headline + Human Patient Profile (5 cols on compact, 4 on xl) */}
           <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-5 min-w-0">
             {/* Display Headline */}
@@ -308,10 +331,10 @@ export const AmbulanceWorkspace: React.FC = () => {
                   </div>
                   <div>
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">
-                      Receiving Medical Destination
+                      {isFacilityConfirmed ? 'Receiving Medical Destination' : 'Recommended Destination (Provisional)'}
                     </span>
                     <h3 className="font-black text-sm text-slate-900 leading-tight">
-                      {activeCase.ambulance.assignedHospital}
+                      {displayFacilityName}
                     </h3>
                   </div>
                 </div>
@@ -319,12 +342,26 @@ export const AmbulanceWorkspace: React.FC = () => {
                 <span className={`px-2.5 py-1 rounded-full text-[10px] font-black border uppercase tracking-wider flex items-center gap-1.5 ${
                   activeCase.hospitalReadiness?.status === 'BAY_READY'
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : 'bg-blue-50 text-[#0E62FE] border-blue-200'
+                    : activeCase.hospitalReadiness?.isPreAlertDispatched
+                    ? 'bg-blue-50 text-[#0E62FE] border-blue-200'
+                    : 'bg-slate-100 text-slate-600 border-slate-200'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${
-                    activeCase.hospitalReadiness?.status === 'BAY_READY' ? 'bg-emerald-500 animate-pulse' : 'bg-blue-500'
+                    activeCase.hospitalReadiness?.status === 'BAY_READY'
+                      ? 'bg-emerald-500 animate-pulse'
+                      : activeCase.hospitalReadiness?.isPreAlertDispatched
+                      ? 'bg-blue-500'
+                      : 'bg-slate-400'
                   }`} />
-                  <span>{activeCase.hospitalReadiness?.status === 'BAY_READY' ? 'Bay 1 Sterile Ready' : 'Pre-Alert Transmitted'}</span>
+                  <span>
+                    {activeCase.hospitalReadiness?.status === 'BAY_READY'
+                      ? 'Bay Ready & Sterile'
+                      : activeCase.hospitalReadiness?.isPreAlertDispatched
+                      ? 'Pre-Alert Transmitted'
+                      : isFacilityConfirmed
+                      ? 'Pre-Alert Pending'
+                      : 'Recommendation · Unconfirmed'}
+                  </span>
                 </span>
               </div>
 
@@ -333,30 +370,30 @@ export const AmbulanceWorkspace: React.FC = () => {
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col justify-center">
                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Touchdown Corridor</span>
                   <span className="font-tabular font-black text-slate-950 text-base sm:text-lg mt-0.5">
-                    {activeCase.ambulance.effectiveEtaMinutes || 14} MINS
+                    {activeCase.status === 'ARRIVED' || activeCase.conduitStep >= 6 ? 'ARRIVED' : `${activeCase.ambulance.effectiveEtaMinutes || 14} MINS`}
                   </span>
                   <span className="text-[10px] text-slate-500 font-semibold truncate">
-                    {activeCase.ambulance.isTrafficDelayed ? 'Traffic Delay Applied' : 'Transit Corridor Clear'}
+                    {activeCase.status === 'ARRIVED' || activeCase.conduitStep >= 6 ? 'At Facility Bay' : activeCase.ambulance.isTrafficDelayed ? 'Traffic Delay Applied' : 'Transit Corridor Clear'}
                   </span>
                 </div>
 
                 <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex flex-col justify-center">
                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Assigned Bay</span>
                   <span className="font-black text-slate-900 text-xs sm:text-sm mt-0.5 truncate">
-                    {activeCase.hospitalReadiness?.assignedBay || 'Resuscitation Bay 1'}
+                    {activeCase.hospitalReadiness?.assignedBay || 'Awaiting Assignment'}
                   </span>
-                  <span className="text-[10px] text-emerald-700 font-bold truncate">
-                    {activeCase.hospitalReadiness?.status === 'BAY_READY' ? 'Sterile Prep Complete' : 'Hot Standby'}
+                  <span className={`text-[10px] font-bold truncate ${activeCase.hospitalReadiness?.status === 'BAY_READY' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                    {activeCase.hospitalReadiness?.status === 'BAY_READY' ? 'Sterile Prep Complete' : activeCase.hospitalReadiness?.assignedBay ? 'Bay Assigned' : 'Awaiting Hospital'}
                   </span>
                 </div>
 
                 <div className="p-3 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 flex flex-col justify-center">
                   <span className="text-[9px] font-black text-[#0E62FE] uppercase tracking-wider">Catchment Match</span>
                   <span className="font-tabular font-black text-[#0E62FE] text-base sm:text-lg mt-0.5">
-                    94% Fit
+                    {activeCase.facilityMatching?.candidates?.find(c => c.isPrimary)?.matchScore || 94}% Fit
                   </span>
                   <span className="text-[10px] text-slate-600 font-semibold truncate">
-                    Top Tier Capability
+                    Prototype Algorithm Match
                   </span>
                 </div>
               </div>
@@ -365,20 +402,132 @@ export const AmbulanceWorkspace: React.FC = () => {
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between gap-3 text-xs">
                 <p className="text-[11px] text-slate-600 leading-snug font-medium truncate">
                   <strong className="text-slate-800">Why Selected: </strong>
-                  {domain === 'TRAUMA' 
-                    ? 'Level-1 angio-embolization and available red resuscitation bay.' 
-                    : domain === 'SNAKEBITE' 
-                    ? 'Regional toxicology unit with dedicated antivenom cold-chain stocks.' 
-                    : 'Dedicated toxicology ICU with mechanical ventilation and atropine infusion protocols.'}
+                  {activeCase.facilityMatching?.algorithmRationale || (
+                    domain === 'TRAUMA'
+                      ? 'Level-1 angio-embolization and available red resuscitation bay.'
+                      : domain === 'SNAKEBITE'
+                      ? 'Regional toxicology unit with dedicated antivenom cold-chain stocks.'
+                      : domain === 'RESPIRATORY_DISTRESS'
+                      ? 'Pulmonary intensive care unit with non-invasive ventilation & high-flow oxygen.'
+                      : domain === 'POISONING'
+                      ? 'Dedicated toxicology ICU with mechanical ventilation and atropine infusion protocols.'
+                      : 'Emergency critical care facility with rapid stabilization and monitoring.'
+                  )}
                 </p>
                 <button
                   onClick={() => setIsWhyModalOpen(true)}
                   className="text-[11px] font-black text-[#0E62FE] hover:underline flex items-center gap-1 shrink-0 cursor-pointer"
                 >
-                  <span>Formula</span>
-                  <ArrowUpRight className="w-3.5 h-3.5" />
+                  <span>Compare</span>
+                  <ArrowUpRight className="w-3 h-3" />
                 </button>
               </div>
+
+              {/* Explicit Arrival Action for In-Transit Phase */}
+              {activeCase.status !== 'ARRIVED' && activeCase.status !== 'TRANSFER_COMPLETED' && activeCase.conduitStep < 6 && (
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    When vehicle reaches hospital bay, confirm arrival to initiate transfer of care.
+                  </span>
+                  <button
+                    onClick={() => {
+                      markPatientArrived();
+                      showToast('Patient Marked Arrived', `Vehicle reached ${displayFacilityName}. Bedside handover ready.`, 'success');
+                    }}
+                    className="px-4 py-2.5 rounded-2xl bg-[#0E62FE] hover:bg-[#0050E6] text-white text-xs font-black shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 hover:scale-105"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>MARK PATIENT ARRIVED</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 3. FOCUSED ARRIVAL & TRANSFER-OF-CARE CARD (Sections 7 & 8) */}
+            {(activeCase.status === 'ARRIVED' || activeCase.status === 'TRANSFER_COMPLETED' || activeCase.conduitStep >= 6) && (
+              <div className="p-5 sm:p-6 bg-gradient-to-br from-white via-blue-50/20 to-emerald-50/30 rounded-3xl border-2 border-emerald-300 shadow-sm flex flex-col gap-4 animate-in fade-in">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800">
+                        PATIENT ARRIVED · RECEIVING FACILITY
+                      </span>
+                      <h3 className="font-black text-sm text-slate-900 leading-tight">
+                        {activeCase.ambulance.assignedHospital}
+                      </h3>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300 font-mono">
+                    {activeCase.status === 'TRANSFER_COMPLETED' ? 'TRANSFER COMPLETED' : activeCase.conduitStep >= 7 ? 'HANDOVER IN PROGRESS' : 'READY FOR HANDOVER'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Patient</span>
+                    <strong className="text-xs font-black text-slate-900 block truncate">{patient.name}</strong>
+                    <span className="text-[10px] text-slate-500 font-semibold">{patient.age}y · {patient.sex}</span>
+                  </div>
+                  <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Latest Vitals</span>
+                    <strong className="text-xs font-black text-slate-900 block">HR {currentVitals.heartRate} · SpO2 {currentVitals.spo2}%</strong>
+                    <span className="text-[10px] text-slate-500 font-semibold">BP {currentVitals.systolicBp}/{currentVitals.diastolicBp}</span>
+                  </div>
+                  <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Assigned Bay</span>
+                    <strong className="text-xs font-black text-slate-900 block truncate">{activeCase.hospitalReadiness?.assignedBay || 'Awaiting Assignment'}</strong>
+                    <span className="text-[10px] text-emerald-700 font-bold">{activeCase.hospitalReadiness?.status === 'BAY_READY' ? 'Sterile Ready' : 'Prep in Progress'}</span>
+                  </div>
+                  <div className="p-2.5 rounded-2xl bg-white border border-slate-200/80">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Clinician Review</span>
+                    <strong className="text-xs font-black text-slate-900 block truncate">{isClinicianEndorsed ? 'Confirmed' : clinicianEndorsement?.status || 'Reviewed'}</strong>
+                    <span className="text-[10px] text-slate-500 font-semibold truncate">{clinicianEndorsement?.clinicianName || 'Dr. Sunita Rao'}</span>
+                  </div>
+                </div>
+
+                {activeCase.status !== 'TRANSFER_COMPLETED' ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                    <p className="text-xs text-slate-600 font-medium">
+                      {activeCase.conduitStep >= 7
+                        ? 'Handover initiated. Awaiting receiving emergency team confirmation.'
+                        : 'Ambulance is at emergency reception. Initiate formal transfer-of-care protocol with receiving clinical team.'}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setIsHandoverModalOpen(true)}
+                        className="px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black transition-all cursor-pointer flex items-center gap-1.5"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>VIEW HANDOVER PACKAGE</span>
+                      </button>
+                      {activeCase.conduitStep < 7 && (
+                        <button
+                          onClick={() => setIsHandoverConfirmModalOpen(true)}
+                          className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md shadow-emerald-600/25 transition-all cursor-pointer hover:scale-105 flex items-center gap-1.5"
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>HANDOVER PATIENT</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3.5 rounded-2xl bg-emerald-100/70 border border-emerald-300 text-emerald-950 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <span className="font-bold">
+                      Prehospital transfer completed. Patient care transitioned to {activeCase.ambulance.assignedHospital}.
+                    </span>
+                    <button
+                      onClick={() => setIsHandoverModalOpen(true)}
+                      className="px-4 py-2 rounded-xl bg-white text-emerald-900 font-black border border-emerald-300 shadow-2xs hover:bg-emerald-50 transition-colors flex items-center gap-1.5"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>OPEN HANDOVER PACKAGE</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
               {/* Bi-directional Coordination Handshake Vector */}
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-medium">
@@ -389,11 +538,10 @@ export const AmbulanceWorkspace: React.FC = () => {
                 <span className="font-mono text-slate-500 uppercase font-bold hidden sm:inline">Unbroken Care Chain</span>
               </div>
             </div>
-          </div>
 
           {/* RIGHT COLUMN: Streaming Telemetry + Automated Clinical Propagation Status (Full width on compact, 3 cols on xl) */}
           <div className="lg:col-span-12 xl:col-span-3 flex flex-col gap-3.5 min-w-0">
-            
+
             <div className="flex items-center justify-between px-1">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                 Sensor Telemetry Stream
@@ -460,7 +608,7 @@ export const AmbulanceWorkspace: React.FC = () => {
                 <p className="text-[11px] leading-relaxed text-slate-600">
                   Telemetry, patient assessment, and prehospital interventions propagate continuously into the remote clinician's console in real-time.
                 </p>
-                
+
                 <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px]">
                   <span className="text-slate-400 font-medium">Specialist on call:</span>
                   <span className="font-bold text-slate-800">
@@ -582,7 +730,7 @@ export const AmbulanceWorkspace: React.FC = () => {
                   Submit Field Clinical Assessment
                 </h3>
               </div>
-              <button 
+              <button
                 onClick={() => setIsResponseModalOpen(false)}
                 className="text-slate-400 hover:text-slate-700 font-bold text-sm cursor-pointer"
               >
@@ -641,6 +789,7 @@ export const AmbulanceWorkspace: React.FC = () => {
                 onClick={() => {
                   if (customResponseText.trim()) {
                     submitFieldResponse(activeCase.pendingDataRequest!.id, customResponseText.trim());
+                    showToast('Clinical Assessment Sent', 'Field observation delivered to Remote Specialist.', 'success');
                     setIsResponseModalOpen(false);
                   }
                 }}
@@ -653,6 +802,124 @@ export const AmbulanceWorkspace: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Handover Confirmation Surface (Section 8) */}
+      {isHandoverConfirmModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 flex flex-col gap-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <h3 className="font-black text-base text-slate-900">
+                    COMPLETE TRANSFER OF CARE
+                  </h3>
+                  <span className="text-xs text-slate-500 font-medium">
+                    Formal Clinical Handover to Receiving Emergency Facility
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsHandoverConfirmModalOpen(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Patient Identity</span>
+                  <strong className="text-slate-900 font-black text-sm block">{patient.name}</strong>
+                  <span className="text-slate-500">{patient.age}y · {patient.sex} · Conscious: {patient.consciousState}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Receiving Facility</span>
+                  <strong className="text-slate-900 font-black text-sm block">{activeCase.ambulance.assignedHospital}</strong>
+                  <span className="text-slate-500">Bay: {activeCase.hospitalReadiness?.assignedBay || 'Awaiting Assignment'}</span>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Latest Confirmed Vitals</span>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="p-1.5 rounded-xl bg-white border border-slate-200/60">
+                    <span className="text-[9px] text-slate-400 font-bold block">HR</span>
+                    <strong className="text-xs font-black text-slate-900">{currentVitals.heartRate} bpm</strong>
+                  </div>
+                  <div className="p-1.5 rounded-xl bg-white border border-slate-200/60">
+                    <span className="text-[9px] text-slate-400 font-bold block">SpO2</span>
+                    <strong className="text-xs font-black text-slate-900">{currentVitals.spo2}%</strong>
+                  </div>
+                  <div className="p-1.5 rounded-xl bg-white border border-slate-200/60">
+                    <span className="text-[9px] text-slate-400 font-bold block">BP</span>
+                    <strong className="text-xs font-black text-slate-900">{currentVitals.systolicBp}/{currentVitals.diastolicBp}</strong>
+                  </div>
+                  <div className="p-1.5 rounded-xl bg-white border border-slate-200/60">
+                    <span className="text-[9px] text-slate-400 font-bold block">RR</span>
+                    <strong className="text-xs font-black text-slate-900">{currentVitals.respiratoryRate}/min</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Handover Package Summary</span>
+                <p className="text-[11px] text-slate-600">
+                  <strong className="text-slate-800">Condition: </strong>{patient.incidentType} — {patient.chiefComplaint}
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  <strong className="text-slate-800">Clinician Review: </strong>{isClinicianEndorsed ? 'Confirmed by Dr. Sunita Rao' : clinicianEndorsement?.status || 'In Transit Review'}
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  <strong className="text-slate-800">Timeline Events: </strong>{activeCase.timeline.length} immutable events recorded
+                </p>
+                <p className="text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-200/60">
+                  SHA-256 Provenance Digest verified · WHO-aligned SBAR structured transfer
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Handover Notes / Direct Verbal Exchange
+                </label>
+                <textarea
+                  value={handoverNotes}
+                  onChange={(e) => setHandoverNotes(e.target.value)}
+                  className="w-full h-16 p-3 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20"
+                  placeholder="Record receiving nurse/physician notes..."
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-3">
+              <button
+                onClick={() => setIsHandoverConfirmModalOpen(false)}
+                className="px-4 py-2 rounded-full text-xs font-bold text-slate-500 hover:bg-slate-100 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  initiateHandover(handoverNotes);
+                  showToast('Transfer of Care Initiated', 'WHO SBAR briefing transmitted to receiving ED charge.', 'info');
+                  setIsHandoverConfirmModalOpen(false);
+                }}
+                className="px-6 py-2.5 rounded-full text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 cursor-pointer flex items-center gap-1.5 hover:scale-105 transition-all"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>CONFIRM HANDOVER</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prehospital Handover Package Viewer Modal */}
+      <PrehospitalHandoverPanel
+        isOpen={isHandoverModalOpen}
+        onClose={() => setIsHandoverModalOpen(false)}
+      />
     </>
   );
 };

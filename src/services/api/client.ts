@@ -5,7 +5,7 @@
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/v1';
 const HEALTH_URL = (import.meta as any).env?.VITE_API_HEALTH_URL || 'http://127.0.0.1:8000/health';
-const DEFAULT_TIMEOUT_MS = 4000;
+const DEFAULT_TIMEOUT_MS = 60000;
 
 export class ApiError extends Error {
   public status: number;
@@ -46,7 +46,7 @@ export async function checkBackendHealth(): Promise<{ online: boolean; version?:
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   const controller = new AbortController();
-  const timeoutMs = (options as any).timeoutMs || (options.body instanceof FormData ? 20000 : DEFAULT_TIMEOUT_MS);
+  const timeoutMs = (options as any).timeoutMs || (options.body instanceof FormData ? 60000 : DEFAULT_TIMEOUT_MS);
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {

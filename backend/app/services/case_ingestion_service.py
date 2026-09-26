@@ -90,11 +90,18 @@ class CaseIngestionService:
                 detail="Transcription yielded empty content. Please speak clearly or retry."
             )
 
+        if client_transcript and client_transcript.strip():
+            stt_label = "BROWSER SPEECH"
+        elif "fasterwhisper" in transcript_res.provider.lower():
+            stt_label = "LOCAL FASTER-WHISPER"
+        else:
+            stt_label = "DETERMINISTIC STT FALLBACK"
         # Extract candidates
         candidates = extract_case_candidates(
             raw_text=raw_transcript,
             source_type="VOICE",
-            source_id=f"voice-{source_hash[:12]}"
+            source_id=f"voice-{source_hash[:12]}",
+            transcription_engine=stt_label,
         )
 
         draft_id = f"dft-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}"
@@ -138,7 +145,8 @@ class CaseIngestionService:
         candidates = extract_case_candidates(
             raw_text=clean_text,
             source_type="TEXT",
-            source_id=f"text-{source_hash[:12]}"
+            source_id=f"text-{source_hash[:12]}",
+            transcription_engine="Direct Clinical Text / Dispatch Notes",
         )
 
         draft_id = f"dft-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}"
@@ -567,9 +575,9 @@ class CaseIngestionService:
         while db.query(EmergencyCaseModel).filter(EmergencyCaseModel.id == case_id).first():
             case_id = f"PR-{uuid.uuid4().int % 9000 + 1000}"
 
-        domain_val = (options.domain if options and options.domain else candidate.get("domainHint", "TRAUMA")).upper()
+        domain_val = (options.domain if options and options.domain else candidate.get("domainHint", "GENERAL_EMERGENCY")).upper()
         if domain_val not in ("TRAUMA", "SNAKEBITE", "POISONING", "RESPIRATORY_DISTRESS", "CARDIAC", "GENERAL_EMERGENCY"):
-            domain_val = "TRAUMA"
+            domain_val = "GENERAL_EMERGENCY"
 
         # 1. Create EmergencyCaseModel
         now = datetime.now(timezone.utc)
@@ -581,9 +589,9 @@ class CaseIngestionService:
         case = EmergencyCaseModel(
             id=case_id,
             domain=domain_val,
-            status="IN_TRANSIT",
-            scenario_title=scenario_title or "Active Emergency Transit",
-            conduit_step=2,
+            status="REPORTED",
+            scenario_title=scenario_title or "Active Emergency Assessment",
+            conduit_step=1,
             current_version=1,
             created_at=now
         )
@@ -629,7 +637,20 @@ class CaseIngestionService:
         call_sign = (options.ambulance_call_sign if options and options.ambulance_call_sign else "Echo-4")
         crew_lead = (options.crew_lead if options and options.crew_lead else current_user.display_name)
         eta = get_val("etaMinutes", 12)
-        assigned_hosp = (options.assigned_hospital if options and options.assigned_hospital else "Manipal Hospital (Level-1 Trauma Suite)")
+        # Domain-appropriate default receiving facility
+        _domain_hospital_defaults = {
+            "TRAUMA": "Manipal Hospital (Level-1 Trauma Suite)",
+            "SNAKEBITE": "Victoria Hospital (Regional Toxicology & Antivenom Center)",
+            "POISONING": "MS Ramaiah Medical Center (Dedicated Toxicology ICU)",
+            "RESPIRATORY_DISTRESS": "MS Ramaiah Medical Center (Pulmonary ICU)",
+            "CARDIAC": "Manipal Hospital (Cardiac Cath Lab)",
+            "GENERAL_EMERGENCY": "Nearest Available Emergency Facility",
+        }
+        assigned_hosp = (
+            options.assigned_hospital
+            if (options and options.assigned_hospital)
+            else "Awaiting Facility Selection"
+        )
 
         ambulance = AmbulanceModel(
             id=f"amb-{case_id}",
@@ -688,57 +709,106 @@ class CaseIngestionService:
         db.add(vital_snap)
 
         # 5. Facility Candidates & Readiness
-        facilities = [
-            FacilityCandidateModel(
-                id=f"fac-{case_id}-1",
+        # Facility candidates are domain-specific so the matching engine produces a meaningful recommendation
+        _domain_facilities: dict = {
+            "TRAUMA": [
+                {
+                    "id": "HOSP-MANIPAL", "name": "Manipal Hospital (Level-1 Trauma Suite)",
+                    "trauma_level": "Certified Level-1 Trauma Suite", "distance_km": 4.8, "match_score": 94,
+                    "specialty_fit": "24/7 Angio-Embolization & Neurotrauma",
+                    "availability": "Red Bay Available", "rationale": "Highest clinical fit for trauma.", "primary": True
+                },
+                {
+                    "id": "HOSP-APOLLO", "name": "Apollo Hospital (Level-1 Trauma)",
+                    "trauma_level": "Level-1 Trauma Suite", "distance_km": 9.1, "match_score": 78,
+                    "specialty_fit": "Comprehensive Trauma & Neurosurgery",
+                    "availability": "Bay busy", "rationale": "Secondary option with longer ETA.", "primary": False
+                },
+            ],
+            "SNAKEBITE": [
+                {
+                    "id": "HOSP-VICTORIA", "name": "Victoria Hospital (Antivenom Centre)",
+                    "trauma_level": "Regional Toxicology & Antivenom Centre", "distance_km": 6.0, "match_score": 96,
+                    "specialty_fit": "Antivenom Cold-Chain & Envenomation ICU",
+                    "availability": "Antivenom bay available", "rationale": "Dedicated antivenom stocks and envenomation expertise.", "primary": True
+                },
+                {
+                    "id": "HOSP-RAMAIAH", "name": "MS Ramaiah Medical Center",
+                    "trauma_level": "Tertiary Care Centre", "distance_km": 8.4, "match_score": 75,
+                    "specialty_fit": "General Emergency & Toxicology",
+                    "availability": "1 Bay Available", "rationale": "Secondary receiving option.", "primary": False
+                },
+            ],
+            "POISONING": [
+                {
+                    "id": "HOSP-RAMAIAH", "name": "MS Ramaiah Medical Center (Toxicology ICU)",
+                    "trauma_level": "Tertiary Referral Centre", "distance_km": 5.5, "match_score": 97,
+                    "specialty_fit": "Dedicated Toxicology ICU & Atropine Infusion Protocol",
+                    "availability": "ICU Bay Available", "rationale": "Dedicated toxicology ICU and ventilator readiness.", "primary": True
+                },
+                {
+                    "id": "HOSP-MANIPAL", "name": "Manipal Hospital",
+                    "trauma_level": "Level-1 Trauma Suite", "distance_km": 7.0, "match_score": 72,
+                    "specialty_fit": "General ICU & Emergency",
+                    "availability": "Bay Available", "rationale": "Alternative if primary saturated.", "primary": False
+                },
+            ],
+            "RESPIRATORY_DISTRESS": [
+                {
+                    "id": "HOSP-RAMAIAH", "name": "MS Ramaiah Medical Center (Pulmonary ICU)",
+                    "trauma_level": "Tertiary Referral Centre", "distance_km": 5.5, "match_score": 95,
+                    "specialty_fit": "Pulmonary ICU & Non-Invasive Ventilation",
+                    "availability": "Respiratory ICU bay available", "rationale": "Dedicated respiratory ICU and BIPAP/CPAP capability.", "primary": True
+                },
+                {
+                    "id": "HOSP-MANIPAL", "name": "Manipal Hospital",
+                    "trauma_level": "Level-1 Trauma Suite", "distance_km": 7.0, "match_score": 78,
+                    "specialty_fit": "General ICU & Emergency",
+                    "availability": "Bay Available", "rationale": "Secondary option.", "primary": False
+                },
+            ],
+        }
+        facility_defs = _domain_facilities.get(domain_val, [
+            {
+                "id": "HOSP-NEAREST", "name": "Nearest Emergency Facility",
+                "trauma_level": "Emergency Centre", "distance_km": 5.0, "match_score": 80,
+                "specialty_fit": "General Emergency Care",
+                "availability": "Bay Available", "rationale": "Nearest capable facility.", "primary": True
+            }
+        ])
+        for idx, fd in enumerate(facility_defs):
+            fac_obj = FacilityCandidateModel(
+                id=f"fac-{case_id}-{idx + 1}",
                 case_id=case_id,
-                facility_id="HOSP-MANIPAL",
-                name="Manipal Hospital (Level-1 Trauma Suite)",
-                trauma_level="Certified Level-1 Trauma Suite",
-                distance_km=4.8,
+                facility_id=fd["id"],
+                name=fd["name"],
+                trauma_level=fd["trauma_level"],
+                distance_km=fd["distance_km"],
                 eta_minutes=int(eta) if str(eta).isdigit() else 12,
-                match_score=94,
-                clinical_fit_score=96,
-                availability_score=90,
-                eta_score=95,
-                is_primary=True,
-                specialty_fit="24/7 Angio-Embolization & Neurotrauma",
-                availability="Red Bay Available",
-                rationale="Highest clinical fit and dedicated emergency capabilities.",
-                created_at=now
-            ),
-            FacilityCandidateModel(
-                id=f"fac-{case_id}-2",
-                case_id=case_id,
-                facility_id="HOSP-VICTORIA",
-                name="Victoria Hospital",
-                trauma_level="Level-2 Center",
-                distance_km=7.2,
-                eta_minutes=18,
-                match_score=82,
-                clinical_fit_score=80,
+                match_score=fd["match_score"],
+                clinical_fit_score=fd["match_score"],
                 availability_score=85,
-                eta_score=80,
-                is_primary=False,
-                specialty_fit="General Emergency & Resuscitation",
-                availability="1 Bay Available",
-                rationale="Secondary receiving emergency department.",
+                eta_score=90,
+                is_primary=fd["primary"],
+                specialty_fit=fd["specialty_fit"],
+                availability=fd["availability"],
+                rationale=fd["rationale"],
                 created_at=now
             )
-        ]
-        for f in facilities:
-            db.add(f)
+            db.add(fac_obj)
 
+        # LIFECYCLE CORRECTNESS: New cases must NOT start with PRE_ALERT_TRANSMITTED or a pre-assigned bay.
+        # Hospital readiness starts at UNKNOWN and advances only through explicit authorized workflow events.
         readiness = FacilityReadinessModel(
             id=f"read-{case_id}",
             case_id=case_id,
-            status="PRE_ALERT_TRANSMITTED",
-            assigned_bay="Resuscitation Bay 1",
+            status="UNKNOWN",
+            assigned_bay="Awaiting Assignment",
             confirmed_by=None,
             timestamp=now.strftime("%H:%M:%S"),
-            is_pre_alert_dispatched=True,
+            is_pre_alert_dispatched=False,
             is_pre_alert_acknowledged=False,
-            resources_ready_json=json.dumps(["Level-1 Trauma Team", "Rapid Infuser", "Bedside Ultrasound"]),
+            resources_ready_json=json.dumps([]),
             created_at=now
         )
         db.add(readiness)

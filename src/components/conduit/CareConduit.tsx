@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useEmergency } from '../../context/useEmergency';
-import { 
-  Ambulance, 
-  Building2, 
-  Activity, 
-  ArrowRight, 
-  ShieldCheck, 
-  CheckCircle2, 
+import {
+  Ambulance,
+  Building2,
+  Activity,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
   Stethoscope,
   AlertTriangle
 } from 'lucide-react';
@@ -30,23 +30,25 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
 
   // Clinician endorsement state
   const isEndorsed = clinicianEndorsement?.status === 'CONFIRMED';
-  const clinicianLabel = isEndorsed 
-    ? 'Protocol Endorsed' 
-    : clinicianEndorsement?.status === 'ESCALATED' 
-    ? 'Escalated to Trauma' 
+  const clinicianLabel = isEndorsed
+    ? 'Protocol Endorsed'
+    : clinicianEndorsement?.status === 'ESCALATED'
+    ? 'Escalated — Review Required'
     : clinicianEndorsement?.status === 'DATA_REQUESTED'
     ? 'Data Clarification'
     : 'Reviewing Telemetry';
 
-  // 7-Stage Continuous Care Route Definition with Responsive Labels
+  // 9-Stage Continuous Care Route Definition with Responsive Labels
   const routeStages = [
     { step: 0, label: 'Incident', shortLabel: 'Incident', detail: activeCase.patient.location ? activeCase.patient.location.split(',')[0].slice(0, 12) : 'Incident Site' },
     { step: 1, label: 'Assessment', shortLabel: 'Triage', detail: 'Triage Done' },
     { step: 2, label: 'Ambulance', shortLabel: 'Ambulance', detail: `${ambulance.callSign} ALS` },
-    { step: 3, label: 'Clinician', shortLabel: 'Clinician', detail: isEndorsed ? 'Endorsed' : 'Review' },
-    { step: 4, label: 'Facility', shortLabel: 'Facility', detail: 'Allocated' },
-    { step: 5, label: 'Hospital Ready', shortLabel: 'Ready', detail: isBayReady ? (hospitalReadiness?.assignedBay ? `${hospitalReadiness.assignedBay}` : 'Bay Ready') : 'Pre-Alert' },
-    { step: 6, label: 'Arrival', shortLabel: 'Arrival', detail: `${derivedEta}m ETA` },
+    { step: 3, label: 'Clinician', shortLabel: 'Clinician', detail: isEndorsed ? 'Endorsed' : clinicianEndorsement?.status === 'ESCALATED' ? 'Escalated' : 'Review' },
+    { step: 4, label: 'Facility', shortLabel: 'Facility', detail: hospitalReadiness?.isPreAlertDispatched ? 'Pre-Alert' : 'Allocated' },
+    { step: 5, label: 'Hospital Ready', shortLabel: 'Ready', detail: isBayReady ? (hospitalReadiness?.assignedBay ? `${hospitalReadiness.assignedBay}` : 'Bay Ready') : hospitalReadiness?.isPreAlertDispatched ? 'Awaiting Bay' : 'Pending' },
+    { step: 6, label: 'Arrival', shortLabel: 'Arrival', detail: conduitStep >= 6 || activeCase.status === 'ARRIVED' ? 'Arrived' : `${derivedEta}m ETA` },
+    { step: 7, label: 'Handover', shortLabel: 'Handover', detail: conduitStep >= 8 || activeCase.status === 'TRANSFER_COMPLETED' ? 'Done' : conduitStep >= 7 ? 'Initiated' : 'Pending' },
+    { step: 8, label: 'Completed', shortLabel: 'Complete', detail: conduitStep >= 8 || activeCase.status === 'TRANSFER_COMPLETED' ? 'Transferred' : 'Standby' },
   ];
 
   /* =========================================================================
@@ -104,8 +106,8 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
           {/* Remote Specialist Authority */}
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
-              isEndorsed 
-                ? 'bg-emerald-100/70 text-emerald-700 border-emerald-300' 
+              isEndorsed
+                ? 'bg-emerald-100/70 text-emerald-700 border-emerald-300'
                 : 'bg-amber-100/70 text-amber-700 border-amber-300'
             }`}>
               <ShieldCheck className="w-5 h-5" />
@@ -138,9 +140,13 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
               PRANA RECEPTION CONDUIT · INBOUND CORRIDOR STANDBY
             </span>
           </div>
-          <span className="flex items-center gap-1.5 text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 text-[10px] font-mono font-bold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            FACILITY PRE-ALERT CONFIRMED
+          <span className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-mono font-bold ${
+            hospitalReadiness?.isPreAlertDispatched
+              ? 'text-emerald-800 bg-emerald-50 border-emerald-200'
+              : 'text-amber-800 bg-amber-50 border-amber-200'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${hospitalReadiness?.isPreAlertDispatched ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+            {hospitalReadiness?.isPreAlertDispatched ? 'FACILITY PRE-ALERT CONFIRMED' : 'PRE-ALERT NOT YET SENT'}
           </span>
         </div>
 
@@ -178,10 +184,10 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
             <div>
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Assigned Bay</span>
               <span className="text-xs font-black text-slate-900">
-                {hospitalReadiness?.assignedBay || 'Resuscitation Bay'}
+                {hospitalReadiness?.assignedBay || 'Awaiting Assignment'}
               </span>
               <span className={`text-[10px] font-black uppercase tracking-wider block ${isBayReady ? 'text-emerald-700' : 'text-amber-700'}`}>
-                {isBayReady ? 'Sterile & Verified Ready' : 'Prep in Progress'}
+                {isBayReady ? 'Sterile & Verified Ready' : hospitalReadiness?.assignedBay ? 'Prep in Progress' : 'Not Assigned'}
               </span>
             </div>
           </div>
@@ -194,12 +200,12 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
      VARIANT 3: JOURNEY CONDUIT (Default for Ambulance Field & Mission Canvas)
      Continuous Care Route Vector: Incident -> Assessment -> Ambulance -> Clinician -> Facility -> Ready -> Arrival
      ========================================================================= */
-  const activeStep = conduitStep ?? 2;
+  const activeStep = activeCase.status === 'TRANSFER_COMPLETED' ? 8 : (conduitStep ?? 2);
 
   return (
     <>
       <div className="relative w-full flex flex-col items-center select-none py-2 gap-3.5">
-        
+
         {/* 1. TOP RELATIONSHIP DOCK (Origin Ambulance <---> Destination Hospital) */}
         <div className="w-full max-w-[620px] prana-float-pill px-5 py-2.5 bg-white/95 backdrop-blur-md flex items-center justify-between border border-slate-200/90 shadow-sm z-30">
           {/* Origin Ambulance */}
@@ -253,8 +259,8 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
               </span>
             </div>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${
-              isBayReady 
-                ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
+              isBayReady
+                ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
                 : 'bg-blue-50 text-[#0E62FE] border-blue-200'
             }`}>
               <Building2 className="w-4 h-4" />
@@ -264,9 +270,9 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
 
         {/* 2. CONTINUOUS CARE ROUTE STAGE */}
         <div className="w-full bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-sm flex flex-col gap-5 relative overflow-hidden">
-          
+
           {/* Header Row: Title + Live Sync Status */}
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-[#0E62FE]" />
               <span className="text-[11px] font-black uppercase tracking-widest text-slate-900">
@@ -274,6 +280,15 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
               </span>
             </div>
             <div className="flex items-center gap-2">
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
+                activeCase.status === 'TRANSFER_COMPLETED'
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                  : 'bg-blue-50 text-[#0E62FE] border-blue-200'
+              }`}>
+                {activeCase.status === 'TRANSFER_COMPLETED'
+                  ? 'ALL 9 MILESTONES COMPLETED'
+                  : `STAGE ${activeStep + 1} OF 9 · ${routeStages[activeStep]?.label.toUpperCase()}`}
+              </span>
               <span className="flex items-center gap-1.5 text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200 text-[10px] font-mono font-bold">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
                 Live Sensor Sync
@@ -281,51 +296,62 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
             </div>
           </div>
 
-          {/* Continuous Care Route Rail (7-Node Vector with Responsive Container) */}
-          <div className="relative py-2 sm:py-3 overflow-x-auto no-scrollbar">
-            <div className="min-w-[480px] sm:min-w-0 relative">
+          {/* Continuous Care Route Rail (9-Node Vector with Guaranteed Spacing) */}
+          <div className="relative py-2 overflow-x-auto scrollbar-thin">
+            <div className="min-w-[760px] relative px-4">
               {/* The Continuous Connecting Route Line */}
-              <div className="absolute top-[20px] left-6 right-6 h-1 bg-slate-200 rounded-full">
-                <div 
-                  className="h-full bg-gradient-to-r from-cyan-400 via-[#0E62FE] to-emerald-400 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.max(8, (activeStep / 6) * 100))}%` }}
+              <div className="absolute top-[20px] left-10 right-10 h-1 bg-slate-200 rounded-full">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    activeCase.status === 'TRANSFER_COMPLETED'
+                      ? 'bg-emerald-500'
+                      : 'bg-gradient-to-r from-cyan-400 via-[#0E62FE] to-emerald-400'
+                  }`}
+                  style={{ width: `${activeCase.status === 'TRANSFER_COMPLETED' ? 100 : Math.min(100, Math.max(8, (activeStep / 8) * 100))}%` }}
                 />
               </div>
 
-              {/* Stage Nodes Grid */}
-              <div className="grid grid-cols-7 gap-1 relative z-10">
+              {/* Stage Nodes Row */}
+              <div className="flex items-start justify-between relative z-10">
                 {routeStages.map((stage) => {
-                  const isPassed = activeStep > stage.step;
-                  const isCurrent = activeStep === stage.step;
+                  const isCompleted = activeCase.status === 'TRANSFER_COMPLETED' || activeStep > stage.step;
+                  const isCurrent = activeCase.status !== 'TRANSFER_COMPLETED' && activeStep === stage.step;
 
                   return (
-                    <div key={stage.step} className="flex flex-col items-center text-center px-0.5 min-w-0">
+                    <div key={stage.step} className="flex flex-col items-center text-center px-1 flex-1 min-w-[76px] max-w-[100px]">
                       {/* Circle Node */}
-                      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all shrink-0 ${
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all shrink-0 ${
                         isCurrent
                           ? 'bg-[#0E62FE] text-white ring-4 ring-blue-100 shadow-md shadow-blue-500/30 scale-110'
-                          : isPassed
+                          : isCompleted
                           ? 'bg-emerald-500 text-white shadow-xs'
                           : 'bg-white text-slate-400 border-2 border-slate-200'
                       }`}>
-                        {isPassed ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        {isCompleted ? (
+                          <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                        ) : isCurrent ? (
+                          <span className="font-mono text-[10px] font-black">{stage.step + 1}</span>
                         ) : (
-                          <span className="font-mono text-[9px] sm:text-[10px] font-bold">{stage.step + 1}</span>
+                          <span className="font-mono text-[10px] font-bold">{stage.step + 1}</span>
                         )}
                       </div>
 
-                      {/* Responsive Stage Label: wrapped, non-colliding */}
-                      <span className={`text-[9px] sm:text-[10px] font-black uppercase tracking-tight mt-1.5 leading-tight break-words text-center line-clamp-2 max-w-[64px] sm:max-w-[76px] ${
-                        isCurrent ? 'text-[#0E62FE]' : isPassed ? 'text-slate-800' : 'text-slate-400'
+                      {/* Primary Label */}
+                      <span className={`text-[10px] sm:text-[10.5px] font-black uppercase tracking-tight mt-2 leading-tight text-center ${
+                        isCurrent ? 'text-[#0E62FE]' : isCompleted ? 'text-slate-800' : 'text-slate-400'
                       }`}>
-                        <span className="hidden xl:inline">{stage.label}</span>
-                        <span className="inline xl:hidden">{stage.shortLabel}</span>
+                        {stage.label}
                       </span>
 
-                      {/* Stage Detail */}
-                      <span className="text-[8px] sm:text-[9px] font-medium text-slate-500 hidden sm:block truncate max-w-[65px] mt-0.5">
-                        {stage.detail}
+                      {/* Secondary Detail Badge */}
+                      <span className={`text-[9px] font-semibold mt-1 px-1.5 py-0.2 rounded-full border text-center whitespace-nowrap ${
+                        isCurrent
+                          ? 'bg-blue-50 text-[#0E62FE] border-blue-200 font-bold animate-pulse'
+                          : isCompleted
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-slate-50 text-slate-400 border-slate-200'
+                      }`}>
+                        {isCurrent ? 'ACTIVE' : stage.detail}
                       </span>
                     </div>
                   );
@@ -356,10 +382,10 @@ export const CareConduit: React.FC<CareConduitProps> = ({ variant = 'journey' })
                 {domain === 'POISONING' ? 'TOXICOLOGY' : domain === 'SNAKEBITE' ? 'COAGULATION' : 'HEMODYNAMICS'}
               </span>
               <span className="font-black text-slate-900 text-xs sm:text-[13px] truncate mt-0.5">
-                {domain === 'POISONING' 
-                  ? `Bradycardia: ${currentVitals.heartRate} bpm` 
-                  : domain === 'SNAKEBITE' 
-                  ? '20WBCT Watch' 
+                {domain === 'POISONING'
+                  ? `Bradycardia: ${currentVitals.heartRate} bpm`
+                  : domain === 'SNAKEBITE'
+                  ? '20WBCT Watch'
                   : `Shock Idx: ${shockIndex}`}
               </span>
             </div>

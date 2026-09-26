@@ -173,15 +173,46 @@ Upon confirmation (`POST /api/v1/cases/intake/{draft_id}/confirm`):
 
 ---
 
-## 7. Model Execution Mode Truthfulness
+## 7. Two-Mode Extraction Architecture & Model Identity Verification
 
-PRANA enforces absolute transparency regarding AI models:
-- **`DEMO`**: Deterministic simulation rules.
-- **`LAYA`**: Local fast-path neural classification (~421M parameter model).
-- **`QWEN3`**: Local open-weight reasoning model via Ollama / vLLM.
-- **`FALLBACK`**: Graceful deterministic rules when Ollama is offline or retagged.
+PRANA strictly delineates between two distinct extraction execution modes:
 
-> **Verification Notice**: If an Ollama tag is retagged (e.g. `qwen2.5:0.5b` retagged as `qwen3:8b`), PRANA inspects model parameter counts and does not falsely claim 8B reasoning. Fallback mode is explicitly indicated in the UI.
+### Mode A — Real AI Extraction
+- **Input**: Raw transcript or clinical dispatch text enclosed within `<untrusted_clinical_source>`.
+- **Engine**: Qwen3 (local open-weight LLM, >=7B parameters) running via Ollama or vLLM.
+- **Structured Output**: Ollama JSON schema enforcement (`"format": schema`) generating typed `CaseExtractionResult`.
+- **Validation**: Pydantic V2 schema validation and domain normalization.
+- **Requirement**: Active model identity verification via Ollama `/api/show` checking parameter count (`parameter_size >= 6.5B`), architecture (`qwen2` / `qwen3`), and base model.
+
+### Mode B — Deterministic Fallback
+- **Input**: Raw clinical text.
+- **Engine**: `DeterministicCaseExtractor` with bounded clinical regex grammar.
+- **Spoken Word Normalization**: `normalize_spoken_numbers()` translates phonetic number sequences ("one twenty over eighty", "thirty two", "eighty six percent", "nine minutes away") prior to parsing.
+- **Negation Protection**: `is_negated()` guards against false positive extraction (e.g. "no active bleeding" does NOT register active bleeding; "no history of COPD" does NOT register COPD).
+- **Ambiguity Detection**: Multi-vital phrases ("HR 108 later 118", "BP 120/80 or 110/70") extract both candidates as `ambiguousOptions` with human resolution required.
+- **Age Approximation**: Preserves "~52", "about 52", "approximately 52" with `approximate: true`.
+
+### Model Verification & Honest Fallback Disclosure
+PRANA enforces zero fake AI attribution. If Ollama is running a retagged sub-scale model (e.g., `qwen2.5:0.5b` retagged as `qwen3:8b` with only 494M parameters):
+1. `verify_model_identity()` flags `modelVerified: False`.
+2. The pipeline routes to `DeterministicCaseExtractor`.
+3. The UI observability card explicitly discloses:
+   `DETERMINISTIC FALLBACK · Reason: Local model 'qwen3:8b' is retagged Qwen2.5 0.5B (494.03M), not verified Qwen3 (>=7B). Fallback active to prevent clinical data loss.`
+
+---
+
+## 8. AI Observability & Activity Model
+
+The Case Intake and Clinician surfaces expose complete AI provenance:
+1. **5-Step Pipeline Strip**: `SOURCE` → `TRANSCRIPTION` → `EXTRACTION` → `VALIDATION` → `DRAFT STATUS`.
+2. **Canonical Structured JSON Output**: Expandable view displaying validated extraction dictionary with nested `blood_pressure` and vitals.
+3. **Technical Details Drawer**: Collapsible telemetry separating engine name, model identity, validation status, latency, and payload size from primary clinical facts.
+4. **Care Rail Event Traces**:
+   - `AI_EXTRACTION_STARTED` / `AI_EXTRACTION_COMPLETED`
+   - `AI_VALIDATION_COMPLETED`
+   - `FIELD_ASSESSMENT_SUBMITTED`
+   - `AI_REASSESSMENT_TRIGGERED` (Actor: `PRANA INTELLIGENCE`, P0 priority)
+   - `DECISION_SUPPORT_GENERATED`
 
 ---
 

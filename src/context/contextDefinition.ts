@@ -58,6 +58,11 @@ export interface EmergencyContextType {
   setIsHandoverModalOpen: (open: boolean) => void;
   generateHandoverSnapshot: () => Promise<void>;
   acknowledgeHandoverPackage: (notes?: string) => Promise<void>;
+  // Phase 24 Authoritative Lifecycle Handshake: Arrival -> Handover -> Completion
+  markPatientArrived: (facility?: string, notes?: string) => void;
+  initiateHandover: (notes?: string) => void;
+  acceptHandover: (notes?: string) => void;
+  acknowledgeHospitalEscalation: (notes?: string) => void;
 }
 
 export const EmergencyContext = createContext<EmergencyContextType | null>(null);

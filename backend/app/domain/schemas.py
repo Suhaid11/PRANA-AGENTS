@@ -1,5 +1,6 @@
-from typing import Optional, Literal
-from pydantic import BaseModel, Field, ConfigDict
+import re
+from typing import Optional, Literal, Any
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 # Patient Schemas
 class PatientSchema(BaseModel):
@@ -164,8 +165,8 @@ class FacilityMatchingSchema(BaseModel):
 class HospitalReadinessSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
-    status: Literal["PRE_ALERT_TRANSMITTED", "ACCEPTED", "PREPARING", "BAY_READY", "ACKNOWLEDGED"]
-    assigned_bay: str = Field(alias="assignedBay")
+    status: Literal["UNKNOWN", "PENDING", "PRE_ALERT_TRANSMITTED", "ACCEPTED", "PREPARING", "BAY_READY", "ACKNOWLEDGED"]
+    assigned_bay: Optional[str] = Field(default="Awaiting Assignment", alias="assignedBay")
     confirmed_by: Optional[str] = Field(default=None, alias="confirmedBy")
     timestamp: Optional[str] = None
     is_pre_alert_dispatched: bool = Field(default=True, alias="isPreAlertDispatched")
@@ -207,7 +208,7 @@ class EmergencyCaseDetailSchema(BaseModel):
 
     id: str
     domain: str
-    status: Literal["REPORTED", "DISPATCHED", "ONBOARD", "IN_TRANSIT", "ARRIVED", "HANDED_OVER"]
+    status: Literal["REPORTED", "DISPATCHED", "ONBOARD", "IN_TRANSIT", "ARRIVED", "HANDED_OVER", "TRANSFER_COMPLETED"]
     scenario_title: str = Field(alias="scenarioTitle")
     conduit_step: int = Field(alias="conduitStep")
     current_version: int = Field(default=1, alias="currentVersion")
@@ -533,6 +534,27 @@ class CaseDraftDataSchema(BaseModel):
     eta_minutes: Optional[DraftCandidateField] = Field(default=None, alias="etaMinutes")
     destination_preference: Optional[DraftCandidateField] = Field(default=None, alias="destinationPreference")
     domain_hint: Optional[str] = Field(default="TRAUMA", alias="domainHint")
+    extraction_metadata: Optional["ExtractionMetadataSchema"] = Field(default=None, alias="extractionMetadata")
+
+
+class ExtractionMetadataSchema(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    engine: str = Field(alias="engine")  # e.g. "Qwen3" or "DETERMINISTIC FALLBACK"
+    provider: str = Field(alias="provider")  # e.g. "Qwen3LocalProvider" or "DeterministicCaseExtractor"
+    model: str = Field(alias="model")  # e.g. "qwen3:8b" or "deterministic-rule-v2"
+    model_verified: bool = Field(default=False, alias="modelVerified")
+    model_identity: str = Field(alias="modelIdentity")
+    is_fallback: bool = Field(default=False, alias="isFallback")
+    fallback_reason: Optional[str] = Field(default=None, alias="fallbackReason")
+    transcription_engine: str = Field(default="Direct Clinical Text / File Ingestion", alias="transcriptionEngine")
+    latency_ms: Optional[int] = Field(default=None, alias="latencyMs")
+    validation_status: str = Field(default="Schema Valid", alias="validationStatus")
+    validation_engine: str = Field(default="Pydantic V2 (BaseModel)", alias="validationEngine")
+    fields_extracted_count: int = Field(default=0, alias="fieldsExtractedCount")
+    source_type: str = Field(alias="sourceType")
+    raw_char_count: int = Field(default=0, alias="rawCharCount")
+    created_at: str = Field(alias="createdAt")
 
 
 class CaseExtractionResult(BaseModel):
@@ -559,6 +581,45 @@ class CaseExtractionResult(BaseModel):
     medical_history: list[str] = Field(default_factory=list, alias="medicalHistory")
     ambiguities: list[str] = Field(default_factory=list)
     approximations: list[str] = Field(default_factory=list)
+    missing_fields: list[str] = Field(default_factory=list, alias="missingFields")
+
+    @field_validator("heart_rate", "systolic_bp", "diastolic_bp", "spo2", "respiratory_rate", "approximate_age", "eta_minutes", "gcs_score", mode="before")
+    @classmethod
+    def parse_int_field(cls, v: Any) -> Optional[int]:
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return int(v)
+        if isinstance(v, str):
+            clean = re.sub(r"[^\d]", "", v)
+            return int(clean) if clean else None
+        return None
+
+    @field_validator("temperature_c", mode="before")
+    @classmethod
+    def parse_float_field(cls, v: Any) -> Optional[float]:
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        if isinstance(v, str):
+            m = re.search(r"(\d+(?:\.\d+)?)", v)
+            return float(m.group(1)) if m else None
+        return None
+
+    @field_validator("observations", "interventions", "medical_history", "ambiguities", "approximations", "missing_fields", mode="before")
+    @classmethod
+    def parse_list_field(cls, v: Any) -> list[str]:
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if str(x).strip() and str(x).strip().lower() != "none"]
+        if isinstance(v, str):
+            clean = v.strip()
+            if not clean or clean.lower() == "none":
+                return []
+            return [clean]
+        return []
 
 
 class CaseDraftSchema(BaseModel):
@@ -575,6 +636,7 @@ class CaseDraftSchema(BaseModel):
     candidate_data: CaseDraftDataSchema = Field(alias="candidateData")
     needs_review_count: int = Field(default=0, alias="needsReviewCount")
     confirmed_case_id: Optional[str] = Field(default=None, alias="confirmedCaseId")
+    extraction_metadata: Optional[ExtractionMetadataSchema] = Field(default=None, alias="extractionMetadata")
 
 
 class CaseDraftUpdateRequest(BaseModel):

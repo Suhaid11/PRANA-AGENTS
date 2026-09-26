@@ -1,36 +1,59 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useEmergency } from '../../context/useEmergency';
 import { useAuth } from '../../auth/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { CareConduit } from '../conduit/CareConduit';
 import { CareRail } from '../timeline/CareRail';
 import { WhyThisHospitalModal } from '../facility/WhyThisHospitalModal';
 import { PrehospitalHandoverPanel } from '../handover/PrehospitalHandoverPanel';
-import { 
-  Building2, 
-  CheckCircle2, 
-  ShieldCheck, 
-  Stethoscope, 
+import {
+  Building2,
+  CheckCircle2,
+  ShieldCheck,
+  Stethoscope,
   ArrowUpRight,
-  FileText
+  FileText,
+  AlertTriangle
 } from 'lucide-react';
 
 export const HospitalCommand: React.FC = () => {
-  const { 
-    activeCase, 
-    confirmHospitalBay, 
+  const {
+    activeCase,
+    confirmHospitalBay,
+    acknowledgeHospitalPreAlert,
+    acknowledgeHospitalEscalation,
+    acceptHandover,
     derivedEta,
     handoverPackage,
     isHandoverModalOpen,
     setIsHandoverModalOpen
   } = useEmergency();
   const { role, hasPermission, notifyUnauthorizedAction } = useAuth();
+  const { showToast } = useToast();
   const [isWhyModalOpen, setIsWhyModalOpen] = useState(false);
 
   const { ambulance, patient, hospitalReadiness, clinicianEndorsement, domain, facilityMatching } = activeCase;
   const isBayReady = hospitalReadiness?.status === 'BAY_READY';
-  const assignedBay = hospitalReadiness?.assignedBay || 'Trauma Bay 1 (Red Zone)';
+  const assignedBay = hospitalReadiness?.assignedBay || 'Awaiting Assignment';
   const isClinicianEndorsed = clinicianEndorsement?.status === 'CONFIRMED';
   const clinicianName = clinicianEndorsement?.clinicianName || 'Dr. Sunita Rao, MD';
+
+  const isEscalated = clinicianEndorsement?.status === 'ESCALATED';
+  const isEscalationAcknowledged = Boolean(clinicianEndorsement?.escalationAcknowledgedBy);
+  const isPreAlertSent = Boolean(hospitalReadiness?.isPreAlertDispatched);
+  const isPreAlertAcked = Boolean(hospitalReadiness?.isPreAlertAcknowledged);
+  const isHandoverPending = (activeCase.conduitStep >= 7 || activeCase.status === 'ARRIVED') && activeCase.status !== 'TRANSFER_COMPLETED';
+  const isTransferCompleted = activeCase.status === 'TRANSFER_COMPLETED';
+
+  const suggestedBay = assignedBay !== 'Awaiting Assignment'
+    ? assignedBay
+    : domain === 'RESPIRATORY_DISTRESS'
+    ? 'Pulmonary Resuscitation Bay 1'
+    : domain === 'SNAKEBITE'
+    ? 'Toxicology Bay 3'
+    : domain === 'POISONING'
+    ? 'Decontamination & Tox Bay 4'
+    : 'Trauma Resuscitation Bay 1';
 
   const topCandidate = facilityMatching?.candidates.find((c) => c.isPrimary) || facilityMatching?.candidates[0];
 
@@ -43,7 +66,8 @@ export const HospitalCommand: React.FC = () => {
       );
       return;
     }
-    confirmHospitalBay(assignedBay);
+    confirmHospitalBay(suggestedBay);
+    showToast('Sterile Bay Confirmed', `${suggestedBay} verified and armed for inbound reception.`, 'success');
   };
 
   // Domain-specific ED checklists
@@ -59,12 +83,17 @@ export const HospitalCommand: React.FC = () => {
     { name: 'Mechanical Ventilator Bay', state: 'HOT STANDBY', detail: 'Suction and ventilator checked at Bay 4' },
     { name: 'Decontamination Station', state: 'ISOLATED', detail: 'Dermal rinse area prepped' },
     { name: 'ICU Toxicology Registrar', state: 'ON-SITE', detail: 'Toxicology intensivist scrubbed in' },
+  ] : domain === 'RESPIRATORY_DISTRESS' ? [
+    { name: 'Pulmonary ICU Bay', state: 'HOT STANDBY', detail: 'NIV/BIPAP capable bay pre-warmed' },
+    { name: 'Respiratory Physician On-Call', state: 'NOTIFIED', detail: 'Pulmonologist paged for inbound handover' },
+    { name: 'High-Flow O2 Delivery System', state: 'READY', detail: 'Optiflow / venturi mask prepared' },
+    { name: 'Nebulizer & Bronchodilators', state: 'STAGED', detail: 'Salbutamol and ipratropium prepared' },
+    { name: 'ABG / Portable SpO2 Monitoring', state: 'STANDBY', detail: 'Point-of-care ABG kit at bay' },
   ] : [
-    { name: 'CT Scanner Suite', state: 'HOT STANDBY', detail: 'Cleared for immediate polytrauma scan' },
-    { name: 'O-Negative Blood Units', state: 'READY', detail: '4 units thawed in trauma blood refrigerator' },
-    { name: 'Trauma Surgery Team', state: 'ON-SITE', detail: 'Surgical registrar & scrub nurse alerted' },
-    { name: 'ICU Bed Allocation', state: 'RESERVED', detail: 'Bed ICU-B3 held with ventilator' },
-    { name: 'Interventional Radiology', state: 'ALERTED', detail: 'On-call angio team paged' },
+    { name: 'Emergency Bay', state: 'STANDBY', detail: 'Bay allocated and prepared' },
+    { name: 'Emergency Physician', state: 'ALERTED', detail: 'On-call emergency physician notified' },
+    { name: 'Monitoring Equipment', state: 'READY', detail: 'ECG, SpO2, and IV access prepared' },
+    { name: 'IV Access & Fluids', state: 'STAGED', detail: 'IV cannula and fluid lines prepared' },
   ];
 
   return (
@@ -96,10 +125,10 @@ export const HospitalCommand: React.FC = () => {
 
         {/* 3. Main Hospital Command Stage: Inbound Triage & Capability Verification */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          
+
           {/* LEFT / CENTER (7 cols): Incoming Triage & Why This Hospital? */}
           <div className="lg:col-span-7 flex flex-col gap-5 min-w-0">
-            
+
             {/* Phase 18 Prehospital Handover Card */}
             <div className="p-6 rounded-3xl bg-gradient-to-br from-white via-slate-50 to-blue-50/40 border border-slate-200/90 shadow-sm flex flex-col gap-4">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -165,6 +194,149 @@ export const HospitalCommand: React.FC = () => {
               </div>
             </div>
 
+            {/* Urgent Specialist Escalation Alert */}
+            {isEscalated && (
+              <div className={`p-5 rounded-3xl border-2 shadow-sm flex flex-col gap-3 transition-all ${
+                isEscalationAcknowledged
+                  ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+                  : 'bg-rose-50/95 border-rose-400 text-rose-950 animate-in fade-in duration-300'
+              }`}>
+                <div className="flex items-center justify-between pb-2 border-b border-rose-200/60">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className={`w-5 h-5 shrink-0 ${isEscalationAcknowledged ? 'text-emerald-600' : 'text-rose-600 animate-pulse'}`} />
+                    <div>
+                      <h3 className="font-black text-sm uppercase tracking-tight">
+                        {isEscalationAcknowledged ? 'Specialist Escalation Acknowledged by ED Command' : 'Urgent Tele-Specialist Escalation Active'}
+                      </h3>
+                      <span className="text-[10px] opacity-80 font-bold block">
+                        {isEscalationAcknowledged
+                          ? `Inbound team mobilized · Acknowledged by ${clinicianEndorsement?.escalationAcknowledgedBy} at ${clinicianEndorsement?.escalationAcknowledgedAt}`
+                          : `Escalated by ${clinicianName} (${clinicianEndorsement?.timestamp})`}
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${
+                    isEscalationAcknowledged ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-rose-200 border-rose-300 text-rose-900'
+                  }`}>
+                    {isEscalationAcknowledged ? 'Mobilized' : 'Action Required'}
+                  </span>
+                </div>
+
+                <div className="text-xs space-y-1.5">
+                  <div className="p-3 rounded-2xl bg-white/80 border border-rose-200/80">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Specialist Escalation Rationale</span>
+                    <p className="text-xs font-bold text-slate-900 mt-0.5">
+                      {clinicianEndorsement?.escalationReason || 'Physiological instability requiring immediate trauma/critical care team standby at bay.'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs font-mono font-bold text-slate-700 px-1 pt-1">
+                    <span>HR: <strong className="text-rose-600">{activeCase.currentVitals.heartRate} bpm</strong></span>
+                    <span>BP: <strong className="text-rose-600">{activeCase.currentVitals.systolicBp}/{activeCase.currentVitals.diastolicBp}</strong></span>
+                    <span>SpO2: <strong className="text-rose-600">{activeCase.currentVitals.spo2}%</strong></span>
+                    <span>GCS: <strong className="text-slate-900">{patient.gcsScore}/15</strong></span>
+                  </div>
+                </div>
+
+                {!isEscalationAcknowledged && (
+                  <div className="flex items-center justify-between pt-2 border-t border-rose-200/60">
+                    <span className="text-[11px] text-rose-800 font-medium">
+                      Confirm ED trauma/critical resuscitation team is staged and awaiting unit {ambulance.callSign}.
+                    </span>
+                    <button
+                      onClick={() => {
+                        acknowledgeHospitalEscalation('Dr. Ramesh Rao (ED Triage Charge)');
+                        showToast('Escalation Acknowledged', 'Inbound trauma/critical resuscitation team mobilized.', 'success');
+                      }}
+                      className="px-5 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-black shadow-md shadow-rose-500/25 transition-all cursor-pointer hover:scale-105 shrink-0 flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Acknowledge Escalation</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Operational Transfer of Care & Acceptance Card */}
+            {(isHandoverPending || isTransferCompleted) && (
+              <div className={`p-6 rounded-3xl border-2 shadow-sm flex flex-col gap-4 ${
+                isTransferCompleted
+                  ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+                  : 'bg-indigo-50/90 border-indigo-300 text-indigo-950 animate-in fade-in duration-300'
+              }`}>
+                <div className="flex items-center justify-between pb-3 border-b border-indigo-100">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className={`w-5 h-5 ${isTransferCompleted ? 'text-emerald-600' : 'text-indigo-600'}`} />
+                    <div>
+                      <h3 className="font-black text-sm uppercase tracking-tight">
+                        {isTransferCompleted ? 'Transfer of Care Completed' : 'Formal Handover of Care Pending'}
+                      </h3>
+                      <span className="text-[10px] opacity-80 font-bold block">
+                        {isTransferCompleted
+                          ? `Encounter closed · Transferred to ${assignedBay} · Received by Dr. Ramesh Rao (ED Triage Charge)`
+                          : `Paramedic (${ambulance.crewLead}) has initiated WHO SBAR bedside handover.`}
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${
+                    isTransferCompleted
+                      ? 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                      : 'bg-indigo-200 border-indigo-300 text-indigo-900 animate-pulse'
+                  }`}>
+                    {isTransferCompleted ? 'Transfer Closed' : 'Acceptance Required'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3 rounded-2xl bg-white border border-indigo-100">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Transferring Patient</span>
+                    <strong className="text-xs font-black text-slate-900 block mt-0.5">{patient.name} ({patient.age}y {patient.sex})</strong>
+                    <span className="text-[10px] text-slate-500 font-medium">Chief Complaint: {patient.chiefComplaint}</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-white border border-indigo-100">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Assigned Receiving Bay</span>
+                    <strong className="text-xs font-black text-slate-900 block mt-0.5">{assignedBay}</strong>
+                    <span className="text-[10px] text-slate-500 font-medium">Corridor Transit: Complete</span>
+                  </div>
+                </div>
+
+                {!isTransferCompleted ? (
+                  <div className="flex items-center justify-between pt-2 border-t border-indigo-100 gap-3">
+                    <button
+                      onClick={() => setIsHandoverModalOpen(true)}
+                      className="px-4 py-2 rounded-xl bg-white border border-indigo-200 text-indigo-900 text-xs font-bold hover:bg-indigo-50 transition-colors flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Review Handover Package</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        acceptHandover('Dr. Ramesh Rao (ED Triage Charge)');
+                        showToast('Transfer of Care Completed', `Full clinical handover of ${patient.name} accepted.`, 'success');
+                      }}
+                      className="px-5 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black shadow-md shadow-indigo-500/25 transition-all cursor-pointer hover:scale-105 flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Accept Handover & Assume Care</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-2xl bg-white/80 border border-emerald-200 text-xs flex items-center justify-between">
+                    <span className="text-emerald-900 font-semibold">
+                      Authoritative transfer of care executed. Prehospital timeline locked and archived in receiving EHR.
+                    </span>
+                    <button
+                      onClick={() => setIsHandoverModalOpen(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>View Signed Record</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Incoming Triage & Bay Status Card */}
             <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm flex flex-col gap-5">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -177,9 +349,11 @@ export const HospitalCommand: React.FC = () => {
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${
                   isBayReady
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : 'bg-blue-50 text-[#0E62FE] border-blue-200'
+                    : isPreAlertSent
+                    ? 'bg-blue-50 text-[#0E62FE] border-blue-200'
+                    : 'bg-slate-100 text-slate-700 border-slate-200'
                 }`}>
-                  {isBayReady ? 'BAY 1 STERILE & VERIFIED' : 'INBOUND PRE-ALERT ACTIVE'}
+                  {isBayReady ? `${assignedBay.toUpperCase()} STERILE & VERIFIED` : isPreAlertSent ? 'INBOUND PRE-ALERT ACTIVE' : 'INBOUND EN ROUTE'}
                 </span>
               </div>
 
@@ -209,8 +383,8 @@ export const HospitalCommand: React.FC = () => {
 
               {/* Remote Specialist Endorsement Status */}
               <div className={`p-4 rounded-2xl border text-xs flex items-center justify-between ${
-                isClinicianEndorsed 
-                  ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950' 
+                isClinicianEndorsed
+                  ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950'
                   : 'bg-amber-50/70 border-amber-300 text-amber-950'
               }`}>
                 <div className="flex items-center gap-3">
@@ -220,8 +394,8 @@ export const HospitalCommand: React.FC = () => {
                       {isClinicianEndorsed ? 'Tele-Specialist Handshake Verified' : 'Clinical Protocol Review in Transit'}
                     </strong>
                     <span className="text-[11px] opacity-90 block mt-0.5">
-                      {isClinicianEndorsed 
-                        ? `Protocol confirmed by ${clinicianName} (${clinicianEndorsement?.timestamp})` 
+                      {isClinicianEndorsed
+                        ? `Protocol confirmed by ${clinicianName} (${clinicianEndorsement?.timestamp})`
                         : 'Remote emergency specialist is reviewing streaming telemetry'}
                     </span>
                   </div>
@@ -266,6 +440,29 @@ export const HospitalCommand: React.FC = () => {
                   <div className="text-[8.5px] font-mono text-slate-400 text-center uppercase tracking-tight pt-1 border-t border-slate-200/60">
                     {activeCase.aiDecisionSupport.safetyLabel || 'SIMULATED DECISION SUPPORT — NOT A DIAGNOSIS'}
                   </div>
+                </div>
+              )}
+
+              {/* Inbound Pre-Alert Action if pending acknowledgment */}
+              {isPreAlertSent && !isPreAlertAcked && (
+                <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200 flex items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider block">
+                      Inbound Corridor Pre-Alert Active
+                    </span>
+                    <span className="text-xs text-blue-900 font-medium">
+                      Paramedic unit {ambulance.callSign} transmitted advance clinical pre-alert.
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      acknowledgeHospitalPreAlert('Sister Philomina, RN (ED Charge)');
+                      showToast('Pre-Alert Acknowledged', 'Receiving ED ready for inbound corridor tracking.', 'info');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-[#0E62FE] hover:bg-[#0050E6] text-white text-xs font-black shadow-sm cursor-pointer shrink-0"
+                  >
+                    Acknowledge Pre-Alert
+                  </button>
                 </div>
               )}
 
@@ -329,7 +526,7 @@ export const HospitalCommand: React.FC = () => {
                 </div>
 
                 <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
-                  <span className="text-[9px] font-black text-emerald-700 uppercase tracking-wider block">Suitability Score</span>
+                  <span className="text-[9px] font-black text-emerald-700 uppercase tracking-wider block">Prototype Match Score</span>
                   <strong className="text-lg font-black font-mono text-emerald-900 block leading-tight mt-0.5">{topCandidate?.matchScore || 94}% Fit</strong>
                   <span className="text-[10px] text-emerald-700 font-bold">Top ranked in catchment</span>
                 </div>
@@ -344,7 +541,7 @@ export const HospitalCommand: React.FC = () => {
 
           {/* RIGHT PANEL (5 cols): ED Resource Checklist & Incoming Patient Profile */}
           <div className="lg:col-span-5 flex flex-col gap-5 min-w-0">
-            
+
             {/* Incoming Patient Snapshot */}
             <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm flex flex-col gap-3">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -403,9 +600,9 @@ export const HospitalCommand: React.FC = () => {
       </div>
 
       {/* Why This Hospital Modal */}
-      <WhyThisHospitalModal 
-        isOpen={isWhyModalOpen} 
-        onClose={() => setIsWhyModalOpen(false)} 
+      <WhyThisHospitalModal
+        isOpen={isWhyModalOpen}
+        onClose={() => setIsWhyModalOpen(false)}
       />
 
       {/* Prehospital Handover Package Modal */}

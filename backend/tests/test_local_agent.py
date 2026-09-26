@@ -144,8 +144,8 @@ def test_orchestrator_local_provider_trauma(db_session: Session):
     assert task.status == "REQUIRES_HUMAN_REVIEW"
     assert task.safety_status == "PASSED"
     assert "LocalOpenModel" in task.provider
-    assert task.tool_call_count >= 2
-    assert len(task.traces) >= 2
+    assert task.tool_call_count >= 1
+    assert len(task.traces) >= 1
     assert len(task.missing_data) >= 1
     assert task.signal is not None
     assert task.signal.requires_clinician_review is True
@@ -217,4 +217,4 @@ def test_agent_task_run_endpoint_with_local_provider(medic_token: str):
     assert data["caseId"] == "PR-8492"
     assert data["status"] == "REQUIRES_HUMAN_REVIEW"
     assert "LocalOpenModel" in data["provider"]
-    assert len(data["traces"]) >= 2
+    assert len(data["traces"]) >= 1

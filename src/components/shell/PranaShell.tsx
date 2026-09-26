@@ -1,18 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useEmergency } from '../../context/useEmergency';
 import type { UserRole } from '../../types/emergency';
-import { 
-  RotateCcw, 
-  Radio, 
-  Ambulance, 
-  Stethoscope, 
-  Building2, 
-  Boxes, 
-  Compass, 
-  ChevronDown, 
-  Check, 
-  HeartPulse, 
-  ShieldAlert, 
+import {
+  RotateCcw,
+  Radio,
+  Ambulance,
+  Stethoscope,
+  Building2,
+  Boxes,
+  Compass,
+  ChevronDown,
+  Check,
+  HeartPulse,
+  ShieldAlert,
   Activity,
   Clock
 } from 'lucide-react';
@@ -24,23 +25,56 @@ interface PranaShellProps {
 }
 
 export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
-  const { 
-    appMode, 
-    toggleAppMode, 
-    setAppMode, 
-    activeCase, 
-    activeRole, 
-    setActiveRole, 
-    resetMission, 
-    isStreaming, 
-    toggleStreaming, 
-    selectScenario, 
+  const {
+    appMode,
+    toggleAppMode,
+    setAppMode,
+    activeCase,
+    activeRole,
+    setActiveRole,
+    resetMission,
+    isStreaming,
+    toggleStreaming,
+    selectScenario,
     derivedEta,
     backendStatus,
     realtimeStatus
   } = useEmergency();
   const [isScenarioMenuOpen, setIsScenarioMenuOpen] = useState(false);
+  const scenarioTriggerRef = useRef<HTMLButtonElement>(null);
   const scenarioMenuRef = useRef<HTMLDivElement>(null);
+  const [menuCoords, setMenuCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+
+  // Calculate anchored coordinates ensuring the menu opens DOWN and RIGHT, never under the left rail
+  const updateScenarioMenuPosition = useCallback(() => {
+    if (!scenarioTriggerRef.current) return;
+    const rect = scenarioTriggerRef.current.getBoundingClientRect();
+
+    // Fixed left navigation rail is 76px wide on lg+ viewports (>= 1024px)
+    // On smaller screens, the fixed rail is hidden, but keep a safety margin
+    const minLeft = window.innerWidth >= 1024 ? 84 : 12;
+    const menuWidth = Math.min(336, window.innerWidth - 24);
+
+    // Anchor to the trigger's left edge (expanding toward the right)
+    let left = rect.left;
+
+    // Viewport right edge collision check
+    if (left + menuWidth > window.innerWidth - 16) {
+      left = window.innerWidth - menuWidth - 16;
+    }
+
+    // Strictly enforce minimum left so it NEVER overlaps or goes behind the 76px left navigation
+    left = Math.max(minLeft, left);
+
+    // Vertical placement: 8px below trigger, or flip above if near bottom edge
+    let top = rect.bottom + 8;
+    const estimatedHeight = 320;
+    if (top + estimatedHeight > window.innerHeight - 16 && rect.top - estimatedHeight - 8 > 16) {
+      top = rect.top - estimatedHeight - 8;
+    }
+
+    setMenuCoords({ top, left });
+  }, []);
 
   // Keyboard shortcut Ctrl + Shift + D to activate Demo Mode from Product Mode
   useEffect(() => {
@@ -56,30 +90,60 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [appMode, setAppMode]);
 
-  // Close dropdown on outside click
+  // Handle outside click, escape key, and dynamic repositioning on scroll/resize
   useEffect(() => {
+    if (!isScenarioMenuOpen) return;
+
+    updateScenarioMenuPosition();
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (scenarioMenuRef.current && !scenarioMenuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (scenarioTriggerRef.current && scenarioTriggerRef.current.contains(target)) {
+        return;
+      }
+      if (scenarioMenuRef.current && scenarioMenuRef.current.contains(target)) {
+        return;
+      }
+      setIsScenarioMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
         setIsScenarioMenuOpen(false);
+        scenarioTriggerRef.current?.focus();
       }
     };
+
+    const handleWindowChange = () => {
+      updateScenarioMenuPosition();
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleWindowChange);
+    window.addEventListener('scroll', handleWindowChange, true);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleWindowChange);
+      window.removeEventListener('scroll', handleWindowChange, true);
+    };
+  }, [isScenarioMenuOpen, updateScenarioMenuPosition]);
 
   const navItems: { role: UserRole; label: string; shortLabel: string; icon: React.ElementType; badge?: string }[] = [
     { role: 'FIELD_MEDIC', label: 'Ambulance Field Command', shortLabel: 'Ambulance', icon: Ambulance },
-    { 
-      role: 'REMOTE_CLINICIAN', 
-      label: 'Clinician Review Console', 
-      shortLabel: 'Clinician', 
+    {
+      role: 'REMOTE_CLINICIAN',
+      label: 'Clinician Review Console',
+      shortLabel: 'Clinician',
       icon: Stethoscope,
       badge: activeCase.clinicianEndorsement?.status === 'CONFIRMED' ? 'OK' : 'ACT'
     },
-    { 
-      role: 'HOSPITAL_COMMAND', 
-      label: 'Hospital Command & Bay', 
-      shortLabel: 'Hospital', 
+    {
+      role: 'HOSPITAL_COMMAND',
+      label: 'Hospital Command & Bay',
+      shortLabel: 'Hospital',
       icon: Building2,
       badge: activeCase.hospitalReadiness?.status === 'BAY_READY' ? 'READY' : undefined
     },
@@ -118,18 +182,77 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
       color: '#7C3AED',
       tag: 'Cholinergic Toxindrome',
     },
+    {
+      id: 'PR-4018',
+      domain: 'RESPIRATORY_DISTRESS',
+      title: 'Respiratory Distress',
+      patient: 'Radha Sharma · 52F',
+      detail: 'Acute COPD Exacerbation · Severe Hypoxemia',
+      icon: Activity,
+      color: '#0891B2',
+      tag: 'Respiratory Compromise',
+    },
   ];
 
-  const currentScenario = scenarioList.find((s) => s.id === activeCase.id) || scenarioList[0];
+  // Domain-aware scenario display — must NOT default to TRAUMA for non-demo cases
+  const _domainColorMap: Record<string, string> = {
+    TRAUMA: '#0E62FE',
+    SNAKEBITE: '#D97706',
+    POISONING: '#7C3AED',
+    RESPIRATORY_DISTRESS: '#0891B2',
+    CARDIAC: '#DC2626',
+    GENERAL_EMERGENCY: '#059669',
+  };
+  const currentScenario = scenarioList.find((s) => s.id === activeCase.id) || {
+    id: activeCase.id,
+    domain: activeCase.domain,
+    title: activeCase.domain.replace(/_/g, ' '),
+    patient: `${activeCase.patient.name} · ${activeCase.patient.age}${activeCase.patient.sex === 'Male' ? 'M' : activeCase.patient.sex === 'Female' ? 'F' : ''}`,
+    detail: activeCase.patient.chiefComplaint || '',
+    icon: HeartPulse,
+    color: _domainColorMap[activeCase.domain] || '#64748B',
+    tag: activeCase.patient.incidentType || activeCase.domain,
+  };
+
+  const getLifecycleState = () => {
+    if (activeCase.status === 'TRANSFER_COMPLETED' || activeCase.conduitStep >= 8) {
+      return { label: 'TRANSFER COMPLETED', color: 'bg-emerald-50 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' };
+    }
+    if (activeCase.conduitStep === 7) {
+      return { label: 'HANDOVER PENDING', color: 'bg-indigo-50 text-indigo-800 border-indigo-300 animate-pulse', dot: 'bg-indigo-500' };
+    }
+    if (activeCase.status === 'ARRIVED' || activeCase.conduitStep === 6) {
+      return { label: 'PATIENT ARRIVED', color: 'bg-cyan-50 text-cyan-800 border-cyan-300', dot: 'bg-cyan-500' };
+    }
+    if (activeCase.hospitalReadiness?.status === 'BAY_READY' || activeCase.conduitStep === 5) {
+      return { label: 'HOSPITAL READY', color: 'bg-emerald-50 text-emerald-800 border-emerald-300', dot: 'bg-emerald-500' };
+    }
+    if (activeCase.hospitalReadiness?.isPreAlertDispatched || activeCase.conduitStep === 4) {
+      return { label: 'PRE-ALERT SENT', color: 'bg-blue-50 text-blue-800 border-blue-300', dot: 'bg-blue-500' };
+    }
+    if (activeCase.clinicianEndorsement?.status === 'CONFIRMED' || activeCase.clinicianEndorsement?.status === 'ESCALATED' || activeCase.conduitStep === 3) {
+      return {
+        label: activeCase.clinicianEndorsement?.status === 'ESCALATED' ? 'SPECIALIST ESCALATED' : 'CLINICIAN REVIEW',
+        color: activeCase.clinicianEndorsement?.status === 'ESCALATED' ? 'bg-rose-50 text-rose-800 border-rose-300' : 'bg-blue-50 text-blue-800 border-blue-300',
+        dot: activeCase.clinicianEndorsement?.status === 'ESCALATED' ? 'bg-rose-500' : 'bg-blue-500'
+      };
+    }
+    if (activeCase.conduitStep === 2) {
+      return { label: 'IN TRANSIT', color: 'bg-amber-50 text-amber-800 border-amber-300', dot: 'bg-amber-500' };
+    }
+    return { label: 'ASSESSMENT ACTIVE', color: 'bg-slate-100 text-slate-800 border-slate-300', dot: 'bg-slate-400' };
+  };
+
+  const lifecycle = getLifecycleState();
 
   return (
     <div className="min-h-screen bg-[#EDF1F7] text-[#0C1220] selection:bg-blue-100 selection:text-blue-900">
-      
+
       {/* 1. Deep Navy Technical Command Rail (Left structural spatial anchor - Fixed on desktop) */}
       <aside className="hidden lg:flex flex-col items-center justify-between w-[76px] fixed top-0 bottom-0 left-0 py-6 prana-shell-rail z-40 shrink-0">
         <div className="flex flex-col items-center gap-7">
           {/* Main PRANA Monogram Badge */}
-          <button 
+          <button
             onClick={() => setActiveRole('PORTAL')}
             className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#0E62FE] to-[#0050E6] shadow-lg shadow-blue-500/30 flex items-center justify-center text-white hover:scale-105 transition-all cursor-pointer group relative"
             title="PRANA Mission Portal"
@@ -189,13 +312,13 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
 
       {/* 2. Main Content Canvas (Reserves 76px left margin on desktop for fixed rail) */}
       <div className="min-h-screen flex flex-col min-w-0 lg:pl-[76px]">
-        
+
         {/* Sleek Clinical Header Bar */}
         <header className="px-4 sm:px-8 lg:px-10 pt-5 pb-3 flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/60 bg-white/80 backdrop-blur-md sticky top-0 z-30">
-          
+
           {/* Left: PRANA Identity & Live Emergency Banner */}
           <div className="flex items-center gap-3.5 min-w-0">
-            <button 
+            <button
               onClick={() => setActiveRole('PORTAL')}
               className="text-left group cursor-pointer flex items-center gap-3 shrink-0"
             >
@@ -218,7 +341,7 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
 
             {/* Active Emergency Case Snip */}
             <div className="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-2xl bg-slate-100/80 border border-slate-200/80 text-xs">
-              <span 
+              <span
                 className="w-2.5 h-2.5 rounded-full shrink-0"
                 style={{ backgroundColor: currentScenario.color }}
               />
@@ -233,20 +356,30 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
                 {activeCase.patient.consciousState}
               </span>
             </div>
+
+            {/* Authoritative Lifecycle State Pill */}
+            <div className={`hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider shadow-2xs ${lifecycle.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${lifecycle.dot}`} />
+              <span>{lifecycle.label}</span>
+            </div>
           </div>
 
           {/* Right: Global Scenario Selector + Telemetry Status + ETA */}
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            
-            {/* Global Scenario Selector Dropdown (Single consistent location) */}
-            <div className="relative" ref={scenarioMenuRef}>
+
+            {/* Global Scenario Selector Dropdown Anchor (Single consistent location) */}
+            <div className="relative">
               <button
+                ref={scenarioTriggerRef}
                 onClick={() => setIsScenarioMenuOpen(!isScenarioMenuOpen)}
-                className="flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-full bg-white border border-slate-200 hover:border-[#0E62FE] shadow-xs text-xs font-bold text-slate-800 transition-all cursor-pointer group hover:bg-slate-50"
+                aria-haspopup="true"
+                aria-expanded={isScenarioMenuOpen}
+                aria-label="Switch active competition emergency scenario"
+                className="flex items-center gap-2 px-3 sm:px-3.5 py-1.5 rounded-full bg-white border border-slate-200 hover:border-[#0E62FE] shadow-xs text-xs font-bold text-slate-800 transition-all cursor-pointer group hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#0E62FE]/30"
                 title="Switch active competition emergency scenario"
               >
-                <span 
-                  className="w-2 h-2 rounded-full shrink-0" 
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
                   style={{ backgroundColor: currentScenario.color }}
                 />
                 <span className="uppercase tracking-wider font-extrabold text-[11px] text-slate-900">
@@ -256,12 +389,22 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
                 <span className="font-semibold text-slate-600 hidden sm:inline text-[11px]">
                   {activeCase.patient.name.split(' ')[0]}
                 </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform" />
+                <ChevronDown className={`w-3.5 h-3.5 text-slate-400 group-hover:text-slate-700 transition-transform duration-200 ${isScenarioMenuOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {/* Spatial Scenario Dropdown Menu */}
-              {isScenarioMenuOpen && (
-                <div className="absolute right-0 mt-2 w-72 sm:w-84 bg-white rounded-3xl shadow-2xl border border-slate-200/90 py-2.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              {/* Spatial Scenario Dropdown Menu rendered via Portal outside header clipping & stacking contexts */}
+              {isScenarioMenuOpen && typeof document !== 'undefined' && createPortal(
+                <div
+                  ref={scenarioMenuRef}
+                  role="menu"
+                  aria-label="Emergency Scenarios"
+                  style={{
+                    position: 'fixed',
+                    top: `${menuCoords.top}px`,
+                    left: `${menuCoords.left}px`,
+                  }}
+                  className="w-72 sm:w-84 max-w-[calc(100vw-24px)] bg-white rounded-3xl shadow-2xl border border-slate-200/90 py-2.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150 focus:outline-none"
+                >
                   <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
                       Active Emergency Scenario
@@ -279,6 +422,8 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
                       return (
                         <button
                           key={scen.id}
+                          role="menuitem"
+                          aria-selected={isSelected}
                           onClick={() => {
                             selectScenario(scen.id);
                             setIsScenarioMenuOpen(false);
@@ -288,9 +433,9 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div 
+                            <div
                               className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border"
-                              style={{ 
+                              style={{
                                 backgroundColor: isSelected ? `${scen.color}18` : '#F8FAFC',
                                 borderColor: isSelected ? `${scen.color}50` : '#E2E8F0',
                                 color: scen.color,
@@ -323,7 +468,8 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
                     <span>Updates state synchronously across all roles.</span>
                     <span className="font-mono text-[9px] uppercase font-bold text-slate-400">Deterministic</span>
                   </div>
-                </div>
+                </div>,
+                document.body
               )}
             </div>
 
@@ -343,7 +489,7 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
 
             {/* Real-time WebSocket & Backend Persistence Status Indicator */}
             {realtimeStatus === 'LIVE' ? (
-              <div 
+              <div
                 className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-50 text-cyan-900 border border-cyan-200 shadow-2xs text-[10px] font-bold"
                 title="Real-time WebSocket synchronization active. Instant bi-directional state updates across Ambulance, Clinician, and Hospital."
               >
@@ -351,7 +497,7 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
                 <span className="font-mono uppercase tracking-wider">LIVE SYNC</span>
               </div>
             ) : realtimeStatus === 'RECONNECTING' ? (
-              <div 
+              <div
                 className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs text-[10px] font-bold"
                 title="Reconnecting to real-time WebSocket channel..."
               >
@@ -359,7 +505,7 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
                 <span className="font-mono uppercase tracking-wider">RECONNECTING</span>
               </div>
             ) : backendStatus === 'CONNECTED' ? (
-              <div 
+              <div
                 className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs text-[10px] font-bold"
                 title="Connected to SQLite persistent backend via FastAPI REST."
               >
@@ -367,7 +513,7 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
                 <span className="font-mono uppercase tracking-wider">PERSISTENT DB</span>
               </div>
             ) : backendStatus === 'OFFLINE_FALLBACK' ? (
-              <div 
+              <div
                 className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs text-[10px] font-bold"
                 title="FastAPI backend offline; running in local deterministic fallback mode."
               >
@@ -397,8 +543,8 @@ export const PranaShell: React.FC<PranaShellProps> = ({ children }) => {
 
             {/* Prominent High-Confidence ETA Capsule */}
             <div className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-white shadow-md text-xs font-bold ${
-              activeCase.ambulance.isTrafficDelayed 
-                ? 'bg-gradient-to-r from-amber-600 to-amber-700 shadow-amber-500/25' 
+              activeCase.ambulance.isTrafficDelayed
+                ? 'bg-gradient-to-r from-amber-600 to-amber-700 shadow-amber-500/25'
                 : 'bg-gradient-to-r from-[#0E62FE] to-[#0050E6] shadow-blue-500/25'
             }`}>
               <Clock className="w-3.5 h-3.5 text-white/90" />

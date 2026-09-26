@@ -74,15 +74,69 @@ The application navigation, layout, and component boundaries are **locked and mu
 
 - **Build Tooling**: `npm run build` cleanly generates production bundle (`dist/`) with zero TypeScript errors.
 - **State Machine Acceptance Gate**: 15-step automated acceptance test across all 4 scenarios (`npm test`) — **60/60 PASS (100%)**.
-- **Backend Test Suite**: `pytest backend/tests/` — **120/121 tests PASS** (1 skipped live GPU test when Ollama server is offline) with zero errors. 12/12 dedicated intake tests pass.
-- **Real Case Ingestion Pipeline (Phase 23)**:
-  - Universal intake supporting Voice (`SpeechToTextProvider`), Text, and File (JSON, FHIR R4 Bundle, CSV, TXT).
-  - Unconfirmed `CaseDraft` model with field-level provenance (`source_type`, `extraction_method`, `confidence`, `status`).
-  - Strict human-in-the-loop paramedic confirmation gate before mutating into authoritative `EmergencyCase`.
-  - Manual overrides preserve original values (`status: MANUAL_OVERRIDE`, `original_value`).
-  - Untrusted input boundary (`<untrusted_clinical_source>`) defending against prompt injection.
-  - Zero autonomous prescribing, diagnosing, or triage decisions by the extraction model.
+- **Backend Test Suite**: `pytest backend/tests/` — **121/122 tests PASS** (1 skipped live GPU test when Ollama server is offline) with zero errors. 12/12 dedicated intake tests pass; full lifecycle state flow test passes.
+- **Authoritative 9-Stage Lifecycle (Final Pass)**:
+  - Strict 9-stage state machine (`Incident` → `Assessment` → `Ambulance` → `Clinician` → `Facility` → `Hospital Ready` → `Arrival` → `Handover` → `Completed`).
+  - True WHO-aligned transfer of care: Bedside SBAR handover initiation by field medic (`POST /handover/initiate`) + explicit receiving ED physician acceptance (`POST /handover/accept`).
+  - Cryptographically verifiable prehospital transit record (`PrehospitalHandoverPackage` with SHA-256 digest) decoupled from operational transfer-of-care workflow.
+  - Bidirectional clinician escalation (`URGENT_REVIEW_ESCALATED`) with receiving ED charge acknowledgment (`HOSPITAL_ESCALATION_ACKNOWLEDGED`) and real-time feedback loops.
+  - Zero premature state leakage: New/imported cases initialize in `conduitStep: 1`, `UNKNOWN` facility status, and `assignedBay: "Awaiting Assignment"`.
 - **Dynamic Case UI**: Fully decoupled from hardcoded demo names/incidents. Supports arbitrary cases and 4th scenario `PR-4018` (Radha Sharma · Acute Respiratory Distress) seamlessly across Mission Portal, Care Conduit, Care Rail, and role consoles.
-- **Ponytail Over-Engineering Audit**: Completed and documented in `docs/PONYTAIL-AUDIT.md`. Native Web APIs utilized with zero unnecessary external dependencies.
-- **Current Phase**: Phase 23 — Real Case Intake (Voice/Text/File) + Dynamic Case UI + Demo Decoupling + Clinically Safe Extraction + Ponytail Audit (**COMPLETED & VERIFIED**). Ready for presentation and deployment.
+- **Documentation**: Fully specified in `docs/CASE-LIFECYCLE.md`, `docs/HANDOVER-FLOW.md`, and `docs/PONYTAIL-AUDIT.md`.
+- **Current Status**: AI Observability & Demo Transparency Pass Complete. Zero lint/type errors. Ready for review.
 
+---
+
+## 7. AI Observability Layer (Completed)
+
+> **Directive**: Make PRANA's existing AI pipelines visible, traceable, and honest for live demos — without exposing chain-of-thought.
+
+### 7.1 Backend: `ExtractionMetadataSchema`
+
+- **Location**: `backend/app/domain/schemas.py` — `ExtractionMetadataSchema` (13 fields).
+- **Fields**: `engine`, `provider`, `model`, `modelVerified`, `modelIdentity`, `isFallback`, `fallbackReason`, `transcriptionEngine`, `latencyMs`, `validationStatus`, `validationEngine`, `fieldsExtractedCount`, `rawCharCount`.
+- **Propagation**: `extract_case_candidates()` in `extraction_service.py` generates metadata on every call. Exposed in `CaseDraftSchema` at top-level via `_build_draft_schema()` in `intake.py`.
+- **Honesty Rule**: `isFallback = True` + `fallbackReason = "Local Qwen3 service offline (http://localhost:11434)"` when Ollama is unreachable. No fake AI attribution.
+
+### 7.2 Frontend: AI Extraction Observability Card (Case Intake Modal)
+
+- **Location**: `src/components/portal/CaseIntakeModal.tsx` — rendered in `REVIEW` state, above audit banner.
+- **Content**: 5-step pipeline strip (SOURCE → TRANSCRIPTION → EXTRACTION → PYDANTIC VALIDATION → DRAFT STATUS), amber fallback disclosure banner with honest reason text, expandable Structured JSON Output preview.
+- **Dynamic**: All labels wired directly to `draft.extractionMetadata` from API — no hardcoded strings.
+
+### 7.3 Frontend: AI Authority Card + Pipeline Diagram (Clinician Workspace)
+
+- **Location**: `src/components/clinician/AgentActivityPanel.tsx` — below missing data panel, above mandatory safety notice.
+- **AI AUTHORITY BOUNDARIES**: Two-column CAN/CANNOT grid (open by default). Clear declaration of what AI can and cannot do.
+- **HOW PRANA AI WORKS**: 9-step collapsible pipeline (collapsed by default). Steps 03 and 07 adapt live based on Qwen3 availability.
+
+### 7.4 Care Rail: AI Reassessment Triggered Event
+
+- **Location**: `src/context/EmergencyContext.tsx` — `submitFieldResponse()`.
+- **Behavior**: When field response submitted → two Care Rail entries fire: `"Field Assessment Submitted"` + `"AI Reassessment Triggered"` (actor: `PRANA INTELLIGENCE`). `computeAiSignal()` then executes, closing the loop mechanically.
+- **Rendering**: `CareRail.tsx` renders `PRANA INTELLIGENCE` actor as P0 priority, cyan color, visible in `AI_CLINICIAN` filter tab.
+
+### 7.5 Test Gates (Post AI Observability & Extraction Fix Pass)
+
+| Gate | Result |
+|------|--------|
+| `npm test -- --run` (60 state machine assertions) | **60/60 PASS** |
+| `npm run build` (TypeScript + Vite) | **Built in 346ms, 1908 modules, 0 errors** |
+| `npm run lint` (Oxlint) | **0 errors (9 warnings)** |
+| `tsc -b --noEmit` | **0 errors** |
+| `pytest backend/tests` | **122 passed, 0 failed, 1 warning (100%)** |
+| Browser E2E Text Intake & Activation | **PASS (Case PR-9910 created, 11 fields verified, manual override verified)** |
+
+---
+
+## 8. Final AI Extraction Fix (Completed)
+
+- **Root Causes Resolved**:
+  1. Spoken compound numbers ("one twenty over eighty", "thirty two") unparsed by standard digits regex -> resolved via `normalize_spoken_numbers()`.
+  2. Negation leakage ("no active bleeding", "no history of COPD") generating false positives -> resolved via `is_negated()` boundary checks.
+  3. Ollama model identity forensics (`verify_model_identity()`): actively inspects model parameter counts and architecture via `/api/show`. Flags retagged sub-scale models (e.g. 494M Qwen2.5 retagged as 8B) and routes honestly to deterministic fallback with clear disclosure.
+  4. Ollama structured outputs: enforced typed schema constraint (`"format": schema`) with pre-validators on `CaseExtractionResult`.
+  5. Canonical dual-key normalization: `normalize_extraction_result()` ensures consistent snake_case / camelCase representation.
+  6. Dynamic orchestrator case domain resolution: ensures `domain` accurately resolves to the emergency case record even if `get_case_summary` tool call was omitted during agentic multi-turn execution.
+- **Human Authority Invariant**: `CaseDraft` remains unconfirmed until explicit human clinician/medic confirmation (`CONFIRMED & ACTIVATE EMERGENCY CASE`).
+- **AI Reassessment Loop**: Field medic data response fires `AI_REASSESSMENT_TRIGGERED` under `PRANA INTELLIGENCE` actor on Care Rail.

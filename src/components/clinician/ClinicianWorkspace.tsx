@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useEmergency } from '../../context/useEmergency';
 import { useAuth } from '../../auth/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { CareConduit } from '../conduit/CareConduit';
 import { CareRail } from '../timeline/CareRail';
 import { 
@@ -24,6 +25,7 @@ import { AgentActivityPanel } from './AgentActivityPanel';
 export const ClinicianWorkspace: React.FC = () => {
   const { activeCase, endorseProtocol, derivedEta, setActiveRole, requestFieldData } = useEmergency();
   const { user, role, hasPermission, notifyUnauthorizedAction } = useAuth();
+  const { showToast } = useToast();
   const { currentVitals, patient, ambulance, domain, clinicianEndorsement, hospitalReadiness } = activeCase;
 
   const [clinicianNotes, setClinicianNotes] = useState<string>('');
@@ -61,6 +63,13 @@ export const ClinicianWorkspace: React.FC = () => {
       clinicianName,
       defaultProtocol
     );
+    if (action === 'ESCALATED') {
+      showToast('Specialist Escalation Dispatched', 'Hospital Command alerted for immediate trauma/critical standby.', 'warning');
+    } else if (action === 'CONFIRMED') {
+      showToast('Clinical Protocol Endorsed', `Treatment pathway confirmed by ${clinicianName}.`, 'success');
+    } else if (action === 'ACKNOWLEDGED') {
+      showToast('Telemetry Signal Acknowledged', 'Specialist review noted in timeline.', 'info');
+    }
     setClinicianNotes('');
   };
 
@@ -147,6 +156,7 @@ export const ClinicianWorkspace: React.FC = () => {
   const handleConfirmTransmitRequest = () => {
     if (!pendingReqField.trim()) return;
     requestFieldData(pendingReqField.trim(), pendingReqReason.trim() || undefined, pendingReqPriority);
+    showToast('Field Data Request Sent', `Clarification for ${pendingReqField.trim()} transmitted to Field Medic. Awaiting observation.`, 'info');
     setIsDataRequestModalOpen(false);
   };
 
@@ -174,9 +184,21 @@ export const ClinicianWorkspace: React.FC = () => {
               <span>PROTOCOL ENDORSED · {clinicianName.toUpperCase()} ({clinicianId})</span>
             </span>
           ) : currentStatus === 'ESCALATED' ? (
-            <span className="px-4 py-2 rounded-full text-xs font-black border shadow-xs bg-rose-50 text-rose-800 border-rose-300 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600" />
-              <span>ESCALATED TO SURGICAL TRAUMA SUITE</span>
+            <span className={`px-4 py-2 rounded-full text-xs font-black border shadow-xs flex items-center gap-2 ${
+              clinicianEndorsement?.escalationAcknowledgedBy
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : 'bg-rose-50 text-rose-800 border-rose-300'
+            }`}>
+              {clinicianEndorsement?.escalationAcknowledgedBy ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+              ) : (
+                <AlertTriangle className="w-4 h-4 text-rose-600" />
+              )}
+              <span>
+                {clinicianEndorsement?.escalationAcknowledgedBy
+                  ? `HOSPITAL ACKNOWLEDGED ESCALATION · ${clinicianEndorsement.escalationAcknowledgedBy.toUpperCase()}`
+                  : 'ESCALATED FOR URGENT SPECIALIST REVIEW'}
+              </span>
             </span>
           ) : currentStatus === 'DATA_REQUESTED' ? (
             <span className="px-4 py-2 rounded-full text-xs font-black border shadow-xs bg-amber-50 text-amber-800 border-amber-300 flex items-center gap-2">
@@ -202,6 +224,50 @@ export const ClinicianWorkspace: React.FC = () => {
 
       {/* 2. Clinical Care Conduit (Paramedic <---> Tele-Specialist Waveform Link) */}
       <CareConduit variant="clinical" />
+
+      {/* Escalation Status Banner */}
+      {currentStatus === 'ESCALATED' && (
+        <div className={`p-4 rounded-2xl border-2 flex flex-wrap items-center justify-between gap-3 shadow-xs animate-in fade-in duration-300 ${
+          clinicianEndorsement?.escalationAcknowledgedBy
+            ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950'
+            : 'bg-rose-50/90 border-rose-300 text-rose-950'
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              clinicianEndorsement?.escalationAcknowledgedBy ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
+            }`}>
+              {clinicianEndorsement?.escalationAcknowledgedBy ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+              ) : (
+                <AlertTriangle className="w-5 h-5 text-rose-700 animate-pulse" />
+              )}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider">
+                  {clinicianEndorsement?.escalationAcknowledgedBy
+                    ? 'RECEIVING ED ACKNOWLEDGED ESCALATION · RESUSCITATION TEAM MOBILIZED'
+                    : 'URGENT SPECIALIST ESCALATION DISPATCHED TO RECEIVING HOSPITAL'}
+                </span>
+                <span className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-full ${
+                  clinicianEndorsement?.escalationAcknowledgedBy ? 'bg-emerald-200 text-emerald-900' : 'bg-rose-200 text-rose-900'
+                }`}>
+                  {clinicianEndorsement?.escalationAcknowledgedBy ? 'CONFIRMED' : 'AWAITING ED ACK'}
+                </span>
+              </div>
+              <p className="text-xs font-medium mt-0.5">
+                {clinicianEndorsement?.escalationAcknowledgedBy
+                  ? `ED Charge (${clinicianEndorsement.escalationAcknowledgedBy}) confirmed specialist escalation at ${clinicianEndorsement.escalationAcknowledgedAt}. Surgical / critical care bay alerted.`
+                  : `Reason: ${clinicianEndorsement?.escalationReason || 'Physiological instability requiring immediate trauma/critical care team standby at bay'}. Awaiting hospital charge acknowledgment.`}
+              </p>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <span className="text-[10px] font-mono font-bold block">Hospital: {ambulance.assignedHospital}</span>
+            <span className="text-[10px] font-mono opacity-80 block">ETA: {derivedEta} min</span>
+          </div>
+        </div>
+      )}
 
       {/* Active Clinical Data Request Banner */}
       {activeCase.pendingDataRequest && (

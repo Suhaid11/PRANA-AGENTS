@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+﻿import { apiClient } from './client';
 import type { EmergencyCase } from '../../types/emergency';
 
 export interface ConfirmReviewPlanPayload {
@@ -71,5 +71,15 @@ export async function submitAcknowledgement(caseId: string, payload: Acknowledge
       action: 'ACKNOWLEDGED',
       ...payload,
     }),
+  });
+}
+
+export async function submitHospitalEscalationAcknowledge(
+  caseId: string,
+  payload?: { notes?: string; timestamp?: string }
+): Promise<EmergencyCase> {
+  return apiClient<EmergencyCase>(`/cases/${caseId}/escalation/acknowledge`, {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
   });
 }

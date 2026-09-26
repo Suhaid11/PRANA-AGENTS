@@ -48,7 +48,9 @@ export const CareRail: React.FC<CareRailProps> = ({ compact = false }) => {
       t.includes('bay ready') ||
       t.includes('hospital readiness confirmed') ||
       t.includes('handover') ||
-      t.includes('arrived')
+      t.includes('arrived') ||
+      t.includes('transfer completed') ||
+      t.includes('escalation acknowledged')
     ) {
       return 'P0';
     }
@@ -89,7 +91,7 @@ export const CareRail: React.FC<CareRailProps> = ({ compact = false }) => {
       semanticColor = 'rose';
     } else if (evt.status === 'WARNING') {
       semanticColor = 'amber';
-    } else if (evt.actor === 'AI SUPPORT' || title.toLowerCase().includes('decision support') || title.toLowerCase().includes('agent')) {
+    } else if (evt.actor === 'AI SUPPORT' || evt.actor === 'PRANA INTELLIGENCE' || title.toLowerCase().includes('decision support') || title.toLowerCase().includes('agent') || title.toLowerCase().includes('reassessment')) {
       semanticColor = 'cyan';
     } else if (evt.category === 'CLINICAL') {
       semanticColor = 'blue';
@@ -151,6 +153,18 @@ export const CareRail: React.FC<CareRailProps> = ({ compact = false }) => {
       semanticColor = 'cyan';
     } else if (title.includes('Prehospital Handover Package Generated') || title.includes('Handover Package Generated')) {
       title = 'Prehospital Handover Generated';
+      semanticColor = 'blue';
+    } else if (title.includes('Transfer of Care Completed') || title.includes('TRANSFER COMPLETED') || title.includes('Handover Accepted')) {
+      title = 'Transfer of Care Completed';
+      semanticColor = 'blue';
+    } else if (title.includes('Handover Initiated') || title.includes('HANDOVER INITIATED')) {
+      title = 'Paramedic Handover Initiated';
+      semanticColor = 'blue';
+    } else if (title.includes('Patient Arrived') || title.includes('PATIENT ARRIVED')) {
+      title = 'Patient Arrived at Receiving Facility';
+      semanticColor = 'blue';
+    } else if (title.includes('Escalation Acknowledged') || title.includes('ESCALATION ACKNOWLEDGED')) {
+      title = 'Hospital Acknowledged Escalation';
       semanticColor = 'blue';
     } else if (title.includes('Prehospital Handover Received') || title.includes('Handover Received') || title.includes('Handover Acknowledged')) {
       title = 'Prehospital Handover Acknowledged';

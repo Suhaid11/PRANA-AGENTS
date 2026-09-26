@@ -7,7 +7,11 @@ import {
   ChevronUp, 
   ShieldCheck,
   Cpu,
-  Send
+  Send,
+  Ban,
+  CheckCircle2,
+  ArrowRight,
+  Info
 } from 'lucide-react';
 
 interface AgentActivityPanelProps {
@@ -22,6 +26,8 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({
   onRequestData 
 }) => {
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
+  const [isHowItWorksExpanded, setIsHowItWorksExpanded] = useState<boolean>(false);
+  const [isAuthorityExpanded, setIsAuthorityExpanded] = useState<boolean>(true);
 
   if (!agentTask) {
     return (
@@ -339,6 +345,123 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({
               )}
             </div>
           )}
+
+
+          {/* ─── AI AUTHORITY CARD ─── */}
+          <div className="rounded-xl border border-slate-200/80 overflow-hidden">
+            <button
+              onClick={() => setIsAuthorityExpanded(!isAuthorityExpanded)}
+              className="w-full px-3 py-2.5 bg-slate-50 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                <span>AI AUTHORITY BOUNDARIES</span>
+              </div>
+              {isAuthorityExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+            </button>
+            {isAuthorityExpanded && (
+              <div className="px-3 pb-3 pt-2 bg-white grid grid-cols-2 gap-2 text-[10.5px]">
+                {/* CAN column */}
+                <div className="p-2.5 bg-emerald-50/60 border border-emerald-200/80 rounded-xl">
+                  <div className="flex items-center gap-1.5 text-emerald-800 font-black text-[9.5px] uppercase tracking-wider mb-2">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                    <span>AI CAN</span>
+                  </div>
+                  <ul className="space-y-1 text-emerald-900 font-medium">
+                    {[
+                      'Structure raw clinical inputs',
+                      'Identify missing data gaps',
+                      'Surface decision-support signals',
+                      'Call read-only data tools',
+                      'Reassess on new field data',
+                      'Flag ambiguities / approximations',
+                    ].map((item, i) => (
+                      <li key={i} className="flex items-start gap-1.5">
+                        <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500 shrink-0 mt-0.5" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                {/* CANNOT column */}
+                <div className="p-2.5 bg-rose-50/60 border border-rose-200/80 rounded-xl">
+                  <div className="flex items-center gap-1.5 text-rose-800 font-black text-[9.5px] uppercase tracking-wider mb-2">
+                    <Ban className="w-3 h-3 text-rose-600" />
+                    <span>AI CANNOT</span>
+                  </div>
+                  <ul className="space-y-1 text-rose-900 font-medium">
+                    {[
+                      'Diagnose or triage patients',
+                      'Prescribe or administer drugs',
+                      'Confirm hospital bay ready',
+                      'Mark patient arrived',
+                      'Initiate or complete handover',
+                      'Override human clinical action',
+                    ].map((item, i) => (
+                      <li key={i} className="flex items-start gap-1.5">
+                        <Ban className="w-2.5 h-2.5 text-rose-500 shrink-0 mt-0.5" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ─── HOW PRANA AI WORKS ─── */}
+          <div className="rounded-xl border border-slate-200/80 overflow-hidden">
+            <button
+              onClick={() => setIsHowItWorksExpanded(!isHowItWorksExpanded)}
+              className="w-full px-3 py-2.5 bg-slate-50 flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Info className="w-3.5 h-3.5 text-[#0E62FE]" />
+                <span>HOW PRANA AI WORKS</span>
+              </div>
+              {isHowItWorksExpanded ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
+            </button>
+            {isHowItWorksExpanded && (
+              <div className="px-3 pb-3 pt-2 bg-white">
+                <p className="text-[10px] text-slate-500 font-medium mb-2.5">
+                  End-to-end AI pipeline — from raw field input to human-reviewed clinical signal.
+                </p>
+                {/* Pipeline steps */}
+                <div className="flex flex-col gap-1.5 text-[10px] font-mono">
+                  {[
+                    { step: '01', label: 'INPUT', desc: 'Voice / Text / File from field medic', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+                    { step: '02', label: 'TRANSCRIPTION', desc: 'Browser Speech API or Faster-Whisper STT', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+                    { step: '03', label: 'EXTRACTION', desc: isFallback ? 'Deterministic Rule Extractor (Qwen3 offline)' : 'Qwen3 LLM structured entity extraction', color: isFallback ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-emerald-50 text-emerald-900 border-emerald-200' },
+                    { step: '04', label: 'PYDANTIC V2 VALIDATION', desc: 'Schema gate — rejects hallucinations, enforces types', color: 'bg-emerald-50 text-emerald-900 border-emerald-200' },
+                    { step: '05', label: 'HUMAN CONFIRMATION', desc: 'Field medic reviews and confirms CaseDraft', color: 'bg-blue-50 text-blue-900 border-blue-200' },
+                    { step: '06', label: 'LAYA SYSTEM 1', desc: 'Fast relevance / routing gate (~421M params, single forward pass)', color: 'bg-purple-50 text-purple-900 border-purple-200' },
+                    { step: '07', label: isFallback ? 'FALLBACK EVALUATOR' : 'QWEN3 SYSTEM 2', desc: isFallback ? 'Deterministic CDS signals — same safety, no LLM' : 'Bounded tool-calling evaluation + gap detection', color: isFallback ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-cyan-50 text-cyan-900 border-cyan-200' },
+                    { step: '08', label: 'SAFETY VALIDATION', desc: 'ClinicalSafetyValidator — overconfidence & autonomy gate', color: 'bg-emerald-50 text-emerald-900 border-emerald-200' },
+                    { step: '09', label: 'HUMAN ACTION', desc: 'Clinician reviews signal — CONFIRM / REQUEST DATA / ESCALATE', color: 'bg-amber-50 text-amber-900 border-amber-200' },
+                  ].map(({ step, label, desc, color }, idx, arr) => (
+                    <div key={step}>
+                      <div className={`flex items-start gap-2 p-2 rounded-lg border ${color}`}>
+                        <span className={`w-5 h-5 rounded font-black text-[9px] flex items-center justify-center shrink-0 ${color}`}>{step}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-black text-[9.5px] uppercase tracking-wide">{label}</div>
+                          <div className="font-medium text-[9px] leading-snug opacity-80">{desc}</div>
+                        </div>
+                      </div>
+                      {idx < arr.length - 1 && (
+                        <div className="flex justify-start pl-3">
+                          <ArrowRight className="w-3 h-3 text-slate-300 rotate-90" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2.5 p-2 bg-slate-50 border border-slate-200 rounded-xl text-[9.5px] text-slate-600 font-medium">
+                  <span className="font-black text-slate-800">Agentic Data-Gap Loop: </span>
+                  AI detects gap → Clinician clicks REQUEST DATA → Field Medic receives alert → Field response submitted → AI reassessment triggered → New signal generated
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Mandatory Clinical Safety Notice */}
           <div className="p-2.5 bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-between text-[10px] text-slate-500 font-mono">

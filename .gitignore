@@ -40,3 +40,9 @@ venv/
 *.sqlite3
 backend/*.db
 
+# Test Coverage
+.coverage
+*.coverage
+coverage/
+.pytest_cache/
+

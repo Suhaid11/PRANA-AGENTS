@@ -29,6 +29,10 @@ import {
   appendTimelineEvent,
   evaluateSimulationDecisionEngine,
   generateLocalHandoverPackage,
+  markPatientArrivedState,
+  initiateHandoverState,
+  acceptHandoverState,
+  acknowledgeHospitalEscalationState,
 } from './emergencyEngine';
 import {
   checkBackendHealth,
@@ -48,6 +52,10 @@ import {
   getLatestHandover,
   acknowledgeHandover,
   fetchLatestAgentTask,
+  submitPatientArrival,
+  submitHospitalEscalationAcknowledge,
+  submitHandoverInitiate,
+  submitHandoverAccept,
 } from '../services/api';
 import { 
   CaseRealtimeSubscription, 
@@ -87,6 +95,16 @@ function getEventTitleFromEnvelope(envelope: RealtimeEventEnvelope): string {
       return 'Prehospital Handover Package Generated';
     case 'HANDOVER_ACKNOWLEDGED':
       return 'Prehospital Handover Received & Acknowledged';
+    case 'PATIENT_ARRIVED':
+      return 'Ambulance Arrived at Receiving Facility';
+    case 'PATIENT_HANDOVER_INITIATED':
+      return 'Prehospital Handover Initiated';
+    case 'PATIENT_HANDOVER_ACKNOWLEDGED':
+      return 'Prehospital Transfer of Care Accepted';
+    case 'TRANSFER_COMPLETED':
+      return 'Transfer of Care Completed';
+    case 'HOSPITAL_ESCALATION_ACKNOWLEDGED':
+      return 'Hospital Escalation Acknowledged';
     case 'AGENT_TASK_STARTED':
       return 'PRANA Intelligence: Clinical Reasoning Initialized';
     case 'AGENT_TOOL_CALLED':
@@ -99,6 +117,21 @@ function getEventTitleFromEnvelope(envelope: RealtimeEventEnvelope): string {
 }
 
 function getEventDetailFromEnvelope(envelope: RealtimeEventEnvelope): string {
+  if (envelope.eventType === 'PATIENT_ARRIVED') {
+    return `Transport unit arrived at ${envelope.payload?.facility || 'receiving facility'}. Staged for clinical handover.`;
+  }
+  if (envelope.eventType === 'PATIENT_HANDOVER_INITIATED') {
+    return `Field paramedic initiated formal clinical handover to receiving emergency team.`;
+  }
+  if (envelope.eventType === 'PATIENT_HANDOVER_ACKNOWLEDGED') {
+    return `Receiving emergency team acknowledged and accepted patient care handover.`;
+  }
+  if (envelope.eventType === 'TRANSFER_COMPLETED') {
+    return `Transfer of care completed at ${envelope.payload?.facility || 'receiving facility'}. Prehospital transport mission concluded.`;
+  }
+  if (envelope.eventType === 'HOSPITAL_ESCALATION_ACKNOWLEDGED') {
+    return `Receiving Emergency Department (${envelope.payload?.acknowledgedBy || 'ED Charge'}) acknowledged urgent clinician escalation.`;
+  }
   if (envelope.eventType === 'HANDOVER_GENERATED') {
     return `Handover package ${envelope.payload?.packageId || ''} created with SHA-256 digest ${envelope.payload?.integrityHash?.slice(0, 12) || ''}...`;
   }
@@ -569,7 +602,6 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           updatedCase = {
             ...updatedCase,
             handoverStatus: 'GENERATED',
-            conduitStep: Math.max(prev.conduitStep, 5)
           };
           getLatestHandover(prev.id).then(pkg => setHandoverPackage(pkg)).catch(() => {});
           break;
@@ -579,7 +611,6 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           updatedCase = {
             ...updatedCase,
             handoverStatus: 'ACKNOWLEDGED',
-            conduitStep: Math.max(prev.conduitStep, 5)
           };
           setHandoverPackage(prevPkg => prevPkg ? {
             ...prevPkg,
@@ -592,6 +623,62 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               notes: envelope.payload?.notes
             }
           } : null);
+          break;
+        }
+
+        case 'PATIENT_ARRIVED': {
+          updatedCase = {
+            ...updatedCase,
+            status: 'ARRIVED',
+            conduitStep: Math.max(prev.conduitStep, 6),
+            ambulance: {
+              ...prev.ambulance,
+              baseEtaMinutes: 0,
+              trafficDelayMinutes: 0,
+              currentSpeedKmH: 0,
+            },
+          };
+          break;
+        }
+
+        case 'PATIENT_HANDOVER_INITIATED': {
+          updatedCase = {
+            ...updatedCase,
+            conduitStep: Math.max(prev.conduitStep, 7),
+            handoverStatus: 'READY',
+          };
+          break;
+        }
+
+        case 'PATIENT_HANDOVER_ACKNOWLEDGED': {
+          updatedCase = {
+            ...updatedCase,
+            conduitStep: Math.max(prev.conduitStep, 8),
+            handoverStatus: 'ACKNOWLEDGED',
+          };
+          break;
+        }
+
+        case 'TRANSFER_COMPLETED': {
+          updatedCase = {
+            ...updatedCase,
+            status: 'TRANSFER_COMPLETED',
+            conduitStep: Math.max(prev.conduitStep, 8),
+            handoverStatus: 'ACKNOWLEDGED',
+          };
+          break;
+        }
+
+        case 'HOSPITAL_ESCALATION_ACKNOWLEDGED': {
+          updatedCase = {
+            ...updatedCase,
+            clinicianEndorsement: prev.clinicianEndorsement ? {
+              ...prev.clinicianEndorsement,
+              escalationAcknowledgedBy: envelope.payload?.acknowledgedBy || 'Receiving Emergency Team',
+              escalationAcknowledgedAt: envelope.timestamp,
+              escalationNotes: envelope.payload?.notes || 'Resuscitation team alerted and standing by.',
+            } : undefined,
+          };
           break;
         }
 
@@ -937,17 +1024,28 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         respondedBy: 'Dr. Priya Sharma (Paramedic Chief)'
       } : undefined;
 
+      const withResponse = appendTimelineEvent(prev.timeline, {
+        title: 'Field Assessment Submitted',
+        detail: `Field Medic verified: "${responseText}". Recorded in clinical ledger and transmitted to remote specialist.`,
+        actor: 'FIELD MEDIC',
+        category: 'CLINICAL',
+        status: 'SUCCESS',
+        payload: { requestId, response: responseText }
+      });
+
+      const withReassessment = appendTimelineEvent(withResponse, {
+        title: 'AI Reassessment Triggered',
+        detail: `New field data received for "${prev.pendingDataRequest?.field ?? 'requested field'}". PRANA Intelligence re-evaluating clinical signal with updated evidence.`,
+        actor: 'PRANA INTELLIGENCE',
+        category: 'AI',
+        status: 'INFO',
+        payload: { trigger: 'FIELD_RESPONSE_RECEIVED', requestId }
+      });
+
       return {
         ...prev,
         pendingDataRequest: updatedReq,
-        timeline: appendTimelineEvent(prev.timeline, {
-          title: 'Field Assessment Submitted',
-          detail: `Field Medic verified: "${responseText}". Recorded in clinical ledger and transmitted to remote specialist.`,
-          actor: 'FIELD MEDIC',
-          category: 'CLINICAL',
-          status: 'SUCCESS',
-          payload: { requestId, response: responseText }
-        })
+        timeline: withReassessment,
       };
     });
 
@@ -964,6 +1062,46 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       } : undefined
     }));
   }, []);
+
+  const markPatientArrived = useCallback((facility?: string, notes?: string) => {
+    const caseId = activeCase.id;
+    setActiveCase((prev) => markPatientArrivedState(prev, facility, notes));
+    if (isBackendConnected && appMode === 'PRODUCT') {
+      submitPatientArrival(caseId, { facility, notes })
+        .then((updated) => setActiveCase(updated))
+        .catch((err) => console.warn('[PRANA API] Patient arrival sync failed:', err));
+    }
+  }, [activeCase.id, isBackendConnected, appMode]);
+
+  const initiateHandover = useCallback((notes?: string) => {
+    const caseId = activeCase.id;
+    setActiveCase((prev) => initiateHandoverState(prev, notes));
+    if (isBackendConnected && appMode === 'PRODUCT') {
+      submitHandoverInitiate(caseId, { notes })
+        .then((updated) => setActiveCase(updated))
+        .catch((err) => console.warn('[PRANA API] Handover initiate sync failed:', err));
+    }
+  }, [activeCase.id, isBackendConnected, appMode]);
+
+  const acceptHandover = useCallback((notes?: string) => {
+    const caseId = activeCase.id;
+    setActiveCase((prev) => acceptHandoverState(prev, notes));
+    if (isBackendConnected && appMode === 'PRODUCT') {
+      submitHandoverAccept(caseId, { notes })
+        .then((updated) => setActiveCase(updated))
+        .catch((err) => console.warn('[PRANA API] Handover accept sync failed:', err));
+    }
+  }, [activeCase.id, isBackendConnected, appMode]);
+
+  const acknowledgeHospitalEscalation = useCallback((notes?: string) => {
+    const caseId = activeCase.id;
+    setActiveCase((prev) => acknowledgeHospitalEscalationState(prev, notes));
+    if (isBackendConnected && appMode === 'PRODUCT') {
+      submitHospitalEscalationAcknowledge(caseId, { notes })
+        .then((updated) => setActiveCase(updated))
+        .catch((err) => console.warn('[PRANA API] Hospital escalation acknowledge sync failed:', err));
+    }
+  }, [activeCase.id, isBackendConnected, appMode]);
 
   const recordVitalSnapshot = useCallback((snapshotData: Omit<VitalSnapshot, 'timestamp'>) => {
     const now = new Date();
@@ -1181,6 +1319,10 @@ export const EmergencyProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             return updated;
           });
         },
+        markPatientArrived,
+        initiateHandover,
+        acceptHandover,
+        acknowledgeHospitalEscalation,
       }}
     >
       {children}

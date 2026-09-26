@@ -1,6 +1,9 @@
-import json
+﻿import json
+from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -10,9 +13,12 @@ from app.domain.schemas import (
     HandoverAcknowledgeRequest,
     HandoverVerifyResponse,
     HandoverSummarySchema,
+    EmergencyCaseDetailSchema,
     UserRoleEnum
 )
-from app.services.case_service import get_case_or_404
+from app.services.case_service import get_case_or_404, build_case_snapshot
+from app.services.event_service import append_event
+from app.realtime.broadcaster import dispatch_event_nowait
 from app.services.handover_service import (
     generate_and_persist_handover,
     acknowledge_handover_package,
@@ -216,3 +222,157 @@ def export_handover(
             media_type="application/json",
             headers={"Content-Disposition": f'attachment; filename="{filename}"'}
         )
+
+
+class PatientHandoverInitiateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    notes: Optional[str] = None
+    timestamp: Optional[str] = None
+
+@router.post("/initiate", response_model=EmergencyCaseDetailSchema)
+def initiate_patient_handover(
+    case_id: str,
+    handover_req: Optional[PatientHandoverInitiateRequest] = None,
+    current_user: UserModel = Depends(require_role(UserRoleEnum.FIELD_MEDIC.value, UserRoleEnum.PORTAL_ADMIN.value)),
+    db: Session = Depends(get_db)
+):
+    """
+    Field Paramedic initiates formal transfer-of-care patient handover at receiving facility.
+    Advances conduit step to 7 (HANDOVER), appends audit event, and broadcasts PATIENT_HANDOVER_INITIATED.
+    """
+    check_case_access(case_id, current_user, db)
+    case = get_case_or_404(db, case_id)
+
+    now_ts = (handover_req.timestamp if handover_req and handover_req.timestamp else None) or datetime.now(timezone.utc).strftime("%H:%M:%S")
+    notes = handover_req.notes if handover_req else None
+
+    case.conduit_step = max(case.conduit_step, 7)
+
+    detail_str = f"Paramedic ({current_user.display_name}) initiated formal transfer of care to receiving emergency team."
+    if notes:
+        detail_str += f" Notes: {notes}"
+
+    evt = append_event(
+        db,
+        case_id=case.id,
+        title="Prehospital Handover Initiated",
+        detail=detail_str,
+        actor=current_user.display_name,
+        category="CLINICAL",
+        status="INFO",
+        timestamp=now_ts,
+        payload={"initiatedBy": current_user.display_name, "notes": notes, "conduitStep": 7}
+    )
+
+    db.commit()
+
+    dispatch_event_nowait(
+        case_id=case.id,
+        event_type="PATIENT_HANDOVER_INITIATED",
+        version=evt.version,
+        event_id=evt.event_id,
+        timestamp=evt.timestamp,
+        actor_type="FIELD_MEDIC",
+        actor_id=current_user.id,
+        user_id=current_user.id,
+        role=current_user.role,
+        payload={
+            "initiatedBy": current_user.display_name,
+            "notes": notes,
+            "conduitStep": 7
+        }
+    )
+
+    return build_case_snapshot(case)
+
+
+class PatientHandoverAcceptRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    notes: Optional[str] = None
+    timestamp: Optional[str] = None
+
+@router.post("/accept", response_model=EmergencyCaseDetailSchema)
+def accept_patient_handover(
+    case_id: str,
+    accept_req: Optional[PatientHandoverAcceptRequest] = None,
+    current_user: UserModel = Depends(require_role(UserRoleEnum.HOSPITAL_COMMAND.value, UserRoleEnum.PORTAL_ADMIN.value)),
+    db: Session = Depends(get_db)
+):
+    """
+    Receiving Emergency Department accepts formal clinical transfer of care.
+    Concludes the prehospital transit episode, transitions case status to TRANSFER_COMPLETED,
+    advances conduit step to 8 (COMPLETED), appends audit events, and broadcasts TRANSFER_COMPLETED.
+    """
+    check_case_access(case_id, current_user, db)
+    case = get_case_or_404(db, case_id)
+
+    now_ts = (accept_req.timestamp if accept_req and accept_req.timestamp else None) or datetime.now(timezone.utc).strftime("%H:%M:%S")
+    notes = accept_req.notes if accept_req else None
+    hospital_name = case.ambulance.assigned_hospital if case.ambulance else "Receiving Emergency Department"
+
+    case.status = "TRANSFER_COMPLETED"
+    case.conduit_step = max(case.conduit_step, 8)
+
+    evt1 = append_event(
+        db,
+        case_id=case.id,
+        title="Prehospital Transfer of Care Accepted",
+        detail=f"Receiving Emergency Department ({current_user.display_name}) accepted full patient care handover.",
+        actor=current_user.display_name,
+        category="CLINICAL",
+        status="SUCCESS",
+        timestamp=now_ts,
+        payload={"acceptedBy": current_user.display_name, "notes": notes, "conduitStep": 8}
+    )
+
+    evt2 = append_event(
+        db,
+        case_id=case.id,
+        title="Transfer of Care Completed",
+        detail=f"Prehospital transport mission closed. Patient care successfully transitioned to {hospital_name}.",
+        actor="RECEIVING ED",
+        category="SYSTEM",
+        status="SUCCESS",
+        timestamp=now_ts,
+        payload={"facility": hospital_name, "completedAt": now_ts, "status": "TRANSFER_COMPLETED", "conduitStep": 8}
+    )
+
+    db.commit()
+
+    dispatch_event_nowait(
+        case_id=case.id,
+        event_type="PATIENT_HANDOVER_ACKNOWLEDGED",
+        version=evt1.version,
+        event_id=evt1.event_id,
+        timestamp=evt1.timestamp,
+        actor_type="RECEIVING ED",
+        actor_id=current_user.id,
+        user_id=current_user.id,
+        role=current_user.role,
+        payload={
+            "acceptedBy": current_user.display_name,
+            "notes": notes,
+            "status": "TRANSFER_COMPLETED",
+            "conduitStep": 8
+        }
+    )
+
+    dispatch_event_nowait(
+        case_id=case.id,
+        event_type="TRANSFER_COMPLETED",
+        version=evt2.version,
+        event_id=evt2.event_id,
+        timestamp=evt2.timestamp,
+        actor_type="RECEIVING ED",
+        actor_id=current_user.id,
+        user_id=current_user.id,
+        role=current_user.role,
+        payload={
+            "facility": hospital_name,
+            "completedAt": now_ts,
+            "status": "TRANSFER_COMPLETED",
+            "conduitStep": 8
+        }
+    )
+
+    return build_case_snapshot(case)

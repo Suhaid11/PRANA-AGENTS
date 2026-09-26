@@ -33,14 +33,14 @@ class Settings(BaseModel):
     AI_PROVIDER_VERSION: str = os.getenv("AI_PROVIDER_VERSION", "4.0.0-hybrid-laya-qwen3")
     AI_TEMPERATURE: float = float(os.getenv("AI_TEMPERATURE", "0.1"))
     AI_MAX_TOKENS: int = int(os.getenv("AI_MAX_TOKENS", "1024"))
-    AI_REQUEST_TIMEOUT_SECONDS: float = float(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "15.0"))
+    AI_REQUEST_TIMEOUT_SECONDS: float = float(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "45.0"))
     AI_FAIL_OPEN: bool = os.getenv("AI_FAIL_OPEN", "true").lower() in ("true", "1")
     AI_FALLBACK_PROVIDER: str = os.getenv("AI_FALLBACK_PROVIDER", "demo")
     
     # Agent Execution Boundaries
     AI_MAX_AGENT_ITERATIONS: int = int(os.getenv("AI_MAX_AGENT_ITERATIONS", "5"))
     AI_MAX_TOOL_CALLS: int = int(os.getenv("AI_MAX_TOOL_CALLS", "6"))
-    AI_AGENT_TIMEOUT_SECONDS: float = float(os.getenv("AI_AGENT_TIMEOUT_SECONDS", "20.0"))
+    AI_AGENT_TIMEOUT_SECONDS: float = float(os.getenv("AI_AGENT_TIMEOUT_SECONDS", "45.0"))
     AI_PROMPT_VERSION: str = os.getenv("AI_PROMPT_VERSION", "PRANA_QWEN3_AGENT_V1")
     
     # JWT Authentication & Authorization

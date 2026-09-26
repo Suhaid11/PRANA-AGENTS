@@ -10,7 +10,14 @@ import {
   X, 
   ArrowRight, 
   Loader2, 
-  RotateCcw
+  RotateCcw,
+  Cpu,
+  ShieldCheck,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Zap,
+  Database
 } from 'lucide-react';
 import type { CaseDraft, EmergencyCase } from '../../types/emergency';
 import { 
@@ -61,6 +68,8 @@ export const CaseIntakeModal: React.FC<CaseIntakeModalProps> = ({ isOpen, onClos
   const [editingFieldKey, setEditingFieldKey] = useState<string | null>(null);
   const [editingFieldValue, setEditingFieldValue] = useState<string>('');
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
+  const [isJsonPreviewExpanded, setIsJsonPreviewExpanded] = useState(false);
+  const [isTechDetailsExpanded, setIsTechDetailsExpanded] = useState(false);
 
   // Clean up timers on unmount
   useEffect(() => {
@@ -631,7 +640,233 @@ export const CaseIntakeModal: React.FC<CaseIntakeModalProps> = ({ isOpen, onClos
           {/* STATE: REVIEW EXTRACTED CANDIDATE DRAFT */}
           {intakeState === 'REVIEW' && draft && (
             <div className="flex flex-col gap-5 flex-1">
-              
+
+              {/* ─── AI EXTRACTION OBSERVABILITY CARD ─── */}
+              {(() => {
+                const meta = draft.extractionMetadata || (draft.candidateData as any).extractionMetadata;
+                const isFallback = meta?.isFallback ?? true;
+                const fieldsCount = meta?.fieldsExtractedCount ?? '?';
+                const engine = meta?.engine ?? 'DETERMINISTIC FALLBACK';
+                const provider = meta?.provider ?? 'DeterministicCaseExtractor';
+                const model = meta?.model ?? 'deterministic-rule-v2';
+                const modelIdentity = meta?.modelIdentity ?? 'Deterministic Rule Set (Regex/Grammar)';
+                const fallbackReason = meta?.fallbackReason;
+                const transcriptionEngine = meta?.transcriptionEngine ?? 'Direct Clinical Text';
+                const latencyMs = meta?.latencyMs;
+                const validationEngine = meta?.validationEngine ?? 'Pydantic V2 (BaseModel)';
+                const validationStatus = meta?.validationStatus ?? 'Schema Valid';
+                const rawCharCount = meta?.rawCharCount ?? draft.rawContent?.length ?? 0;
+
+                const vitalsForJson: Record<string, unknown> = {};
+                if (draft.candidateData.vitals) {
+                  const v = draft.candidateData.vitals;
+                  const spo2Val = v.spo2?.value ?? v['spo2']?.value;
+                  const rrVal = v.respiratoryRate?.value ?? v['respiratory_rate']?.value;
+                  const hrVal = v.heartRate?.value ?? v['heart_rate']?.value;
+                  const sbpVal = v.systolicBp?.value ?? v['systolic_bp']?.value;
+                  const dbpVal = v.diastolicBp?.value ?? v['diastolic_bp']?.value;
+
+                  if (spo2Val !== undefined && spo2Val !== null) vitalsForJson['spo2'] = spo2Val;
+                  if (rrVal !== undefined && rrVal !== null) vitalsForJson['respiratory_rate'] = rrVal;
+                  if (hrVal !== undefined && hrVal !== null) vitalsForJson['heart_rate'] = hrVal;
+                  if (sbpVal !== undefined && dbpVal !== undefined && sbpVal !== null && dbpVal !== null) {
+                    vitalsForJson['blood_pressure'] = {
+                      systolic: sbpVal,
+                      diastolic: dbpVal
+                    };
+                  }
+                }
+                const structuredPreview = JSON.stringify({
+                  patient_name: draft.candidateData.patientName?.value,
+                  approximate_age: draft.candidateData.approximateAge?.value,
+                  sex: draft.candidateData.sex?.value?.toLowerCase(),
+                  domain: draft.candidateData.domainHint,
+                  medical_history: (draft.candidateData.medicalHistory || []).map(h => {
+                    const val = h.value || '';
+                    if (val.includes('COPD')) return 'COPD';
+                    if (val.includes('Asthma')) return 'Asthma';
+                    if (val.includes('Diabetes')) return 'Diabetes';
+                    if (val.includes('Hypertension')) return 'Hypertension';
+                    return val;
+                  }),
+                  vitals: vitalsForJson,
+                  interventions: (draft.candidateData.interventions || []).map(i => i.value),
+                  observations: (draft.candidateData.observations || []).map(o => o.value),
+                  eta_minutes: draft.candidateData.etaMinutes?.value,
+                }, null, 2);
+
+                return (
+                  <div className="rounded-2xl border overflow-hidden text-xs" style={{borderColor: isFallback ? '#fbbf24' : '#6ee7b7'}}>
+                    {/* Header */}
+                    <div className={`px-4 py-2.5 flex items-center justify-between ${
+                      isFallback ? 'bg-amber-50 border-b border-amber-200' : 'bg-emerald-50 border-b border-emerald-200'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <Cpu className={`w-3.5 h-3.5 ${isFallback ? 'text-amber-700' : 'text-emerald-700'}`} />
+                        <span className={`font-black text-[10px] uppercase tracking-wider ${isFallback ? 'text-amber-900' : 'text-emerald-900'}`}>
+                          PRANA AI EXTRACTION
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded ${
+                          isFallback
+                            ? 'bg-amber-200 text-amber-900'
+                            : 'bg-emerald-200 text-emerald-900'
+                        }`}>
+                          {isFallback ? engine : `QWEN3 LOCAL · ${model}`}
+                        </span>
+                        {!isFallback && (
+                          <span className="text-[9px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                            <ShieldCheck className="w-2.5 h-2.5" />
+                            MODEL VERIFIED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 5-step pipeline strip */}
+                    <div className="bg-white px-4 py-3">
+                      {/* Fallback notice if applicable */}
+                      {isFallback && fallbackReason && (
+                        <div className="mb-3 flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-bold text-amber-900 text-[10px] uppercase tracking-wider block">Honest Extraction Disclosure</span>
+                            <span className="text-amber-800 text-[11px] font-medium">{fallbackReason}</span>
+                            <span className="text-amber-700 text-[10px] font-mono block mt-0.5">Canonical schema · Pydantic validation · Full field provenance · Source-faithful extraction</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-5 gap-1 text-[9.5px] font-mono mb-3">
+                        {/* Step 1: SOURCE */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1 text-slate-500 font-bold uppercase tracking-wider text-[8px]">
+                            <span className="w-3.5 h-3.5 rounded bg-slate-100 text-slate-700 font-black text-[8px] flex items-center justify-center shrink-0">01</span>
+                            SOURCE
+                          </div>
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 flex flex-col gap-0.5">
+                            <span className="font-black text-slate-900 uppercase text-[9px]">{draft.sourceType}</span>
+                            <span className="text-slate-500 text-[8.5px]">{rawCharCount.toLocaleString()} chars</span>
+                          </div>
+                        </div>
+
+                        {/* Step 2: TRANSCRIPTION */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1 text-slate-500 font-bold uppercase tracking-wider text-[8px]">
+                            <span className="w-3.5 h-3.5 rounded bg-slate-100 text-slate-700 font-black text-[8px] flex items-center justify-center shrink-0">02</span>
+                            TRANSCRIPTION
+                          </div>
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 flex flex-col gap-0.5">
+                            <span className="font-black text-slate-900 text-[9px] leading-tight">{transcriptionEngine}</span>
+                          </div>
+                        </div>
+
+                        {/* Step 3: EXTRACTION ENGINE */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1 text-slate-500 font-bold uppercase tracking-wider text-[8px]">
+                            <span className={`w-3.5 h-3.5 rounded font-black text-[8px] flex items-center justify-center shrink-0 ${
+                              isFallback ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}>03</span>
+                            EXTRACTION
+                          </div>
+                          <div className={`border rounded-lg p-1.5 flex flex-col gap-0.5 ${
+                            isFallback ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'
+                          }`}>
+                            <span className={`font-black text-[9px] leading-tight ${
+                              isFallback ? 'text-amber-900' : 'text-emerald-900'
+                            }`}>{engine}</span>
+                            {latencyMs !== undefined && (
+                              <span className="text-slate-500 text-[8.5px] flex items-center gap-0.5">
+                                <Zap className="w-2 h-2" />{latencyMs}ms
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Step 4: SCHEMA VALIDATION */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1 text-slate-500 font-bold uppercase tracking-wider text-[8px]">
+                            <span className="w-3.5 h-3.5 rounded bg-emerald-100 text-emerald-800 font-black text-[8px] flex items-center justify-center shrink-0">04</span>
+                            VALIDATION
+                          </div>
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-1.5 flex flex-col gap-0.5">
+                            <span className="font-black text-emerald-900 text-[9px] leading-tight flex items-center gap-1">
+                              <ShieldCheck className="w-2.5 h-2.5 text-emerald-600" />Passed
+                            </span>
+                            <span className="text-slate-500 text-[8.5px]">{validationStatus}</span>
+                          </div>
+                        </div>
+
+                        {/* Step 5: CASE DRAFT STATUS */}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1 text-slate-500 font-bold uppercase tracking-wider text-[8px]">
+                            <span className="w-3.5 h-3.5 rounded bg-amber-100 text-amber-800 font-black text-[8px] flex items-center justify-center shrink-0">05</span>
+                            DRAFT STATUS
+                          </div>
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-1.5 flex flex-col gap-0.5">
+                            <span className="font-black text-amber-900 text-[9px] leading-tight">Unconfirmed</span>
+                            <span className="text-amber-700 text-[8.5px]">{fieldsCount} candidate fields · Review Required</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Links: Structured Output & Technical Details */}
+                      <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setIsTechDetailsExpanded(!isTechDetailsExpanded)}
+                            className="flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-slate-900 cursor-pointer"
+                          >
+                            <Database className="w-3 h-3 text-slate-400" />
+                            {isTechDetailsExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            TECHNICAL DETAILS
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => setIsJsonPreviewExpanded(!isJsonPreviewExpanded)}
+                          className="flex items-center gap-1 text-[10px] font-bold text-[#0E62FE] hover:text-[#0050E6] cursor-pointer"
+                        >
+                          {isJsonPreviewExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          {isJsonPreviewExpanded ? 'HIDE' : 'SHOW'} STRUCTURED OUTPUT
+                        </button>
+                      </div>
+
+                      {/* Expandable Technical Details */}
+                      {isTechDetailsExpanded && (
+                        <div className="mt-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 text-[10px] font-mono text-slate-600 flex flex-col gap-1.5 leading-relaxed">
+                          <div className="flex justify-between border-b border-slate-200/60 pb-1">
+                            <span className="text-slate-400 font-sans">Provider Class:</span>
+                            <span className="font-bold text-slate-800">{provider}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-200/60 pb-1">
+                            <span className="text-slate-400 font-sans">Model Identity:</span>
+                            <span className="font-bold text-slate-800">{modelIdentity}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-200/60 pb-1">
+                            <span className="text-slate-400 font-sans">Validation Engine:</span>
+                            <span className="font-bold text-slate-800">{validationEngine}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-200/60 pb-1">
+                            <span className="text-slate-400 font-sans">Inference Latency:</span>
+                            <span className="font-bold text-slate-800">{latencyMs ?? 0} ms</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-slate-400 font-sans">Raw Payload Size:</span>
+                            <span className="font-bold text-slate-800">{rawCharCount} characters</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Expandable JSON Preview */}
+                      {isJsonPreviewExpanded && (
+                        <pre className="mt-2.5 font-mono text-[10px] text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto leading-relaxed whitespace-pre-wrap">{structuredPreview}</pre>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Audit Banner */}
               <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">

@@ -13,7 +13,8 @@ export type EmergencyStatus =
   | 'ONBOARD' 
   | 'IN_TRANSIT' 
   | 'ARRIVED' 
-  | 'HANDED_OVER';
+  | 'HANDED_OVER'
+  | 'TRANSFER_COMPLETED';
 
 export type UserRole = 'PORTAL' | 'FIELD_MEDIC' | 'REMOTE_CLINICIAN' | 'HOSPITAL_COMMAND' | 'READINESS';
 
@@ -59,7 +60,7 @@ export interface VitalSnapshot {
   isAbnormal?: boolean;
 }
 
-export type TimelineEventCategory = 'SYSTEM' | 'CLINICAL';
+export type TimelineEventCategory = 'SYSTEM' | 'CLINICAL' | 'AI';
 
 export interface TimelineEvent {
   id: string;
@@ -68,7 +69,7 @@ export interface TimelineEvent {
   category: TimelineEventCategory;
   title: string;
   detail: string;
-  actor: 'SYSTEM' | 'FIELD MEDIC' | 'AI SUPPORT' | 'CLINICIAN' | 'RECEIVING ED';
+  actor: 'SYSTEM' | 'FIELD MEDIC' | 'AI SUPPORT' | 'CLINICIAN' | 'RECEIVING ED' | string;
   status: 'INFO' | 'WARNING' | 'CRITICAL' | 'SUCCESS';
   payload?: Record<string, any>;
 }
@@ -88,10 +89,14 @@ export interface ClinicianEndorsement {
   timestamp?: string;
   notes?: string;
   authorizedProtocol?: string;
+  escalationReason?: string;
+  escalationAcknowledgedBy?: string;
+  escalationAcknowledgedAt?: string;
+  escalationNotes?: string;
 }
 
 export interface HospitalReadiness {
-  status: 'PRE_ALERT_TRANSMITTED' | 'ACCEPTED' | 'PREPARING' | 'BAY_READY' | 'ACKNOWLEDGED';
+  status: 'UNKNOWN' | 'PENDING' | 'PRE_ALERT_TRANSMITTED' | 'ACCEPTED' | 'PREPARING' | 'BAY_READY' | 'ACKNOWLEDGED';
   assignedBay: string;
   confirmedBy?: string;
   timestamp?: string;
@@ -166,7 +171,7 @@ export interface EmergencyCase {
   currentVitals: VitalSnapshot;
   vitalsHistory: VitalSnapshot[];
   timeline: TimelineEvent[];
-  conduitStep: number; // 0: Incident, 1: Assessed, 2: Ambulance, 3: Clinician, 4: Facility, 5: Hospital Ready, 6: Arrival
+  conduitStep: number; // 0: Incident, 1: Assessment, 2: Ambulance, 3: Clinician, 4: Facility, 5: Hospital Ready, 6: Arrival, 7: Handover, 8: Completed
   aiDecisionSupport?: AiDecisionSupport;
   clinicianAlertReceived?: boolean;
   clinicianEndorsement?: ClinicianEndorsement;
@@ -463,6 +468,25 @@ export interface CaseDraftData {
   etaMinutes?: DraftCandidateField<number>;
   destinationPreference?: DraftCandidateField<string>;
   domainHint?: string;
+  extractionMetadata?: ExtractionMetadata;
+}
+
+export interface ExtractionMetadata {
+  engine: string;
+  provider: string;
+  model: string;
+  modelVerified: boolean;
+  modelIdentity: string;
+  isFallback: boolean;
+  fallbackReason?: string;
+  transcriptionEngine: string;
+  latencyMs?: number;
+  validationStatus: string;
+  validationEngine: string;
+  fieldsExtractedCount: number;
+  sourceType: string;
+  rawCharCount: number;
+  createdAt: string;
 }
 
 export interface CaseDraft {
@@ -477,6 +501,7 @@ export interface CaseDraft {
   candidateData: CaseDraftData;
   needsReviewCount: number;
   confirmedCaseId?: string;
+  extractionMetadata?: ExtractionMetadata;
 }
 
 

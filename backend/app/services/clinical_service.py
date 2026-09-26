@@ -483,3 +483,51 @@ def handle_clinician_acknowledgement(
     )
 
     return action_model
+
+def handle_hospital_escalation_acknowledgement(
+    db: Session,
+    case: EmergencyCaseModel,
+    notes: Optional[str] = None,
+    actor_user: Optional[UserModel] = None
+) -> TimelineEventModel:
+    timestamp_str = datetime.now(timezone.utc).strftime("%H:%M:%S")
+    actor_id = actor_user.id if actor_user else "HOSPITAL-704"
+    actor_name = actor_user.display_name if actor_user else "Sister Philomina, RN"
+    role = actor_user.role if actor_user else "HOSPITAL_COMMAND"
+
+    detail_text = f"Receiving Emergency Department ({actor_name}) formally acknowledged the urgent specialist escalation."
+    if notes:
+        detail_text += f" Notes: {notes}"
+
+    evt = append_event(
+        db,
+        case_id=case.id,
+        title="Hospital Escalation Acknowledged",
+        detail=detail_text,
+        actor=actor_name,
+        category="CLINICAL",
+        status="SUCCESS",
+        timestamp=timestamp_str,
+        payload={"acknowledgedBy": actor_name, "notes": notes or "Resuscitation team alerted and standing by."}
+    )
+
+    db.commit()
+
+    dispatch_event_nowait(
+        case_id=case.id,
+        event_type="HOSPITAL_ESCALATION_ACKNOWLEDGED",
+        version=evt.version,
+        event_id=evt.event_id,
+        timestamp=evt.timestamp,
+        actor_type="RECEIVING ED",
+        actor_id=actor_id,
+        user_id=actor_id,
+        role=role,
+        payload={
+            "acknowledgedBy": actor_name,
+            "notes": notes or "Resuscitation team alerted and standing by.",
+            "acknowledgedAt": timestamp_str
+        }
+    )
+
+    return evt

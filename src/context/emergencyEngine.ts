@@ -1,10 +1,10 @@
-import type { 
-  EmergencyCase, 
-  EmergencyDomain, 
-  VitalSnapshot, 
-  PatientProfile, 
-  HospitalCandidate, 
-  AiDecisionSupport, 
+﻿import type {
+  EmergencyCase,
+  EmergencyDomain,
+  VitalSnapshot,
+  PatientProfile,
+  HospitalCandidate,
+  AiDecisionSupport,
   TimelineEvent,
   AmbulanceUnit,
   CdsDataPackage,
@@ -143,10 +143,10 @@ export const evaluateSimulationDecisionEngine = (
     }
   }
 
-  const signalType = domain === 'TRAUMA' 
-    ? 'HEMODYNAMIC_DECOMPENSATION_RISK' 
-    : domain === 'SNAKEBITE' 
-    ? 'SYSTEMIC_ENVENOMATION_PROGRESSION' 
+  const signalType = domain === 'TRAUMA'
+    ? 'HEMODYNAMIC_DECOMPENSATION_RISK'
+    : domain === 'SNAKEBITE'
+    ? 'SYSTEMIC_ENVENOMATION_PROGRESSION'
     : domain === 'POISONING'
     ? 'CHOLINERGIC_CRISIS_SIGNAL'
     : 'RESPIRATORY_COMPROMISE_SIGNAL';
@@ -512,7 +512,7 @@ export const confirmClinicianProtocolState = (
 ): EmergencyCase => {
   const timeStr = timestamp || new Date().toTimeString().split(' ')[0];
 
-  const protocolName = authorizedProtocol || 
+  const protocolName = authorizedProtocol ||
     (prevCase.domain === 'TRAUMA' ? 'Trauma Resuscitation Pathway A' :
      prevCase.domain === 'POISONING' ? 'High-Dose Atropine & Airway Decontamination Protocol' :
      'Polyvalent Antivenom Infusion & Coagulopathy Protocol');
@@ -734,7 +734,7 @@ export const continueCareInTransitState = (
   actionDetail?: string,
   timestamp?: string
 ): EmergencyCase => {
-  const detail = actionDetail || 
+  const detail = actionDetail ||
     (prevCase.domain === 'TRAUMA' ? 'Warm crystalloid IV titration continuing under pressure infuser; serial BP monitoring active.' :
      prevCase.domain === 'POISONING' ? 'Continuous oral/bronchial suction and 100% O2 delivery sustained without interruption.' :
      'Pressure immobilization bandage monitored; limb elevation and serial 20WBCT clot watch maintained.');
@@ -764,8 +764,8 @@ export const sendCaseDataToCdsState = (
 ): EmergencyCase => {
   const timeStr = timestamp || new Date().toTimeString().split(' ')[0];
 
-  const shockIdx = prevCase.currentVitals.systolicBp > 0 
-    ? (prevCase.currentVitals.heartRate / prevCase.currentVitals.systolicBp).toFixed(2) 
+  const shockIdx = prevCase.currentVitals.systolicBp > 0
+    ? (prevCase.currentVitals.heartRate / prevCase.currentVitals.systolicBp).toFixed(2)
     : '0.00';
 
   const observations: string[] = [
@@ -787,8 +787,8 @@ export const sendCaseDataToCdsState = (
     .filter(evt => evt.actor === 'FIELD MEDIC' && evt.title.includes('Intervention Recorded'))
     .map(evt => evt.detail);
 
-  const finalInterventions = recordedInterventions.length > 0 
-    ? recordedInterventions 
+  const finalInterventions = recordedInterventions.length > 0
+    ? recordedInterventions
     : [
         prevCase.domain === 'POISONING'
           ? 'High-flow O2 via BVM, oral secretions suctioned'
@@ -1018,4 +1018,158 @@ export const generateLocalHandoverPackage = (
     safetyNotice: 'This prototype prehospital handover package is generated from demonstration records and does not constitute a clinically validated medical record.',
     integrityHash: digest
   };
+};
+
+/**
+ * 9. Explicit Patient Arrival State Transition
+ * Triggered explicitly by operator/field medic action when ambulance reaches destination.
+ */
+export const markPatientArrivedState = (
+  prevCase: EmergencyCase,
+  facility?: string,
+  notes?: string,
+  timestamp?: string
+): EmergencyCase => {
+  const timeStr = timestamp || new Date().toTimeString().split(' ')[0];
+  const targetFacility = facility || prevCase.ambulance.assignedHospital || 'Receiving Facility';
+
+  const updatedCase: EmergencyCase = {
+    ...prevCase,
+    status: 'ARRIVED',
+    conduitStep: Math.max(prevCase.conduitStep, 6),
+    ambulance: {
+      ...prevCase.ambulance,
+      baseEtaMinutes: 0,
+      trafficDelayMinutes: 0,
+      currentSpeedKmH: 0,
+    },
+  };
+
+  updatedCase.timeline = appendTimelineEvent(
+    updatedCase.timeline,
+    {
+      category: 'CLINICAL',
+      title: 'Ambulance Arrived at Receiving Facility',
+      detail: `Transport unit arrived at ${targetFacility}. Patient staged for immediate transfer of care.` + (notes ? ` (${notes})` : ''),
+      actor: 'FIELD MEDIC',
+      status: 'SUCCESS',
+    },
+    timeStr
+  );
+
+  return updatedCase;
+};
+
+/**
+ * 10. Operational Prehospital Handover Initiation
+ * Paramedic initiates formal transfer-of-care handover with receiving team.
+ */
+export const initiateHandoverState = (
+  prevCase: EmergencyCase,
+  notes?: string,
+  timestamp?: string
+): EmergencyCase => {
+  const timeStr = timestamp || new Date().toTimeString().split(' ')[0];
+
+  const updatedCase: EmergencyCase = {
+    ...prevCase,
+    conduitStep: Math.max(prevCase.conduitStep, 7),
+    handoverStatus: 'READY',
+  };
+
+  updatedCase.timeline = appendTimelineEvent(
+    updatedCase.timeline,
+    {
+      category: 'CLINICAL',
+      title: 'Prehospital Handover Initiated',
+      detail: 'Field Paramedic initiated formal transfer of care to receiving emergency team.' + (notes ? ` Notes: ${notes}` : ''),
+      actor: 'FIELD MEDIC',
+      status: 'INFO',
+    },
+    timeStr
+  );
+
+  return updatedCase;
+};
+
+/**
+ * 11. Operational Transfer of Care Acceptance & Completion
+ * Receiving facility accepts handover, closing the prehospital transit mission.
+ */
+export const acceptHandoverState = (
+  prevCase: EmergencyCase,
+  notes?: string,
+  timestamp?: string
+): EmergencyCase => {
+  const timeStr = timestamp || new Date().toTimeString().split(' ')[0];
+  const hospitalName = prevCase.ambulance.assignedHospital || 'Receiving Facility';
+
+  let updatedCase: EmergencyCase = {
+    ...prevCase,
+    status: 'TRANSFER_COMPLETED',
+    conduitStep: Math.max(prevCase.conduitStep, 8),
+    handoverStatus: 'ACKNOWLEDGED',
+  };
+
+  updatedCase.timeline = appendTimelineEvent(
+    updatedCase.timeline,
+    {
+      category: 'CLINICAL',
+      title: 'Prehospital Transfer of Care Accepted',
+      detail: 'Receiving Emergency Department accepted full clinical transfer of care.' + (notes ? ` Notes: ${notes}` : ''),
+      actor: 'RECEIVING ED',
+      status: 'SUCCESS',
+    },
+    timeStr
+  );
+
+  updatedCase.timeline = appendTimelineEvent(
+    updatedCase.timeline,
+    {
+      category: 'SYSTEM',
+      title: 'Transfer of Care Completed',
+      detail: `Prehospital transport mission closed. Patient care successfully transitioned to ${hospitalName}.`,
+      actor: 'RECEIVING ED',
+      status: 'SUCCESS',
+    },
+    timeStr
+  );
+
+  return updatedCase;
+};
+
+/**
+ * 12. Hospital Escalation Acknowledgement State
+ * Hospital Command confirms receipt of clinician escalation.
+ */
+export const acknowledgeHospitalEscalationState = (
+  prevCase: EmergencyCase,
+  notes?: string,
+  timestamp?: string
+): EmergencyCase => {
+  const timeStr = timestamp || new Date().toTimeString().split(' ')[0];
+
+  const updatedCase: EmergencyCase = {
+    ...prevCase,
+    clinicianEndorsement: prevCase.clinicianEndorsement ? {
+      ...prevCase.clinicianEndorsement,
+      escalationAcknowledgedBy: 'Receiving Emergency Team',
+      escalationAcknowledgedAt: timeStr,
+      escalationNotes: notes || 'Resuscitation team alerted and standing by.',
+    } : undefined,
+  };
+
+  updatedCase.timeline = appendTimelineEvent(
+    updatedCase.timeline,
+    {
+      category: 'CLINICAL',
+      title: 'Hospital Escalation Acknowledged',
+      detail: 'Receiving Emergency Department formally acknowledged the urgent specialist escalation.' + (notes ? ` Notes: ${notes}` : ''),
+      actor: 'RECEIVING ED',
+      status: 'SUCCESS',
+    },
+    timeStr
+  );
+
+  return updatedCase;
 };

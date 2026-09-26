@@ -447,7 +447,10 @@ class AgentOrchestrator:
         """
         missing: list[MissingDataItem] = []
         case_summary = evidence.get("get_case_summary", {})
-        domain = case_summary.get("domain", "TRAUMA")
+        domain = case_summary.get("domain")
+        if not domain:
+            case_obj = self.db.query(EmergencyCaseModel).filter(EmergencyCaseModel.id == self.case_id).first()
+            domain = case_obj.domain if case_obj else "TRAUMA"
         vitals = evidence.get("get_latest_vitals", {})
         obs = evidence.get("get_recent_observations", {}).get("observations", [])
         interventions = evidence.get("get_recorded_interventions", {}).get("interventions", [])
@@ -545,7 +548,10 @@ class AgentOrchestrator:
     def _synthesize_signal(self, evidence: dict[str, Any], source_event_ids: list[str]) -> DecisionSupportSignal:
         """Synthesizes structured observable signals strictly labeled as simulated decision support."""
         case_summary = evidence.get("get_case_summary", {})
-        domain = case_summary.get("domain", "TRAUMA")
+        domain = case_summary.get("domain")
+        if not domain:
+            case_obj = self.db.query(EmergencyCaseModel).filter(EmergencyCaseModel.id == self.case_id).first()
+            domain = case_obj.domain if case_obj else "TRAUMA"
         vitals = evidence.get("get_latest_vitals", {})
         timestamp = vitals.get("timestamp", datetime.now(timezone.utc).strftime("%H:%M:%S"))
 

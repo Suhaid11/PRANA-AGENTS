@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+﻿from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.domain.models import UserModel
@@ -10,12 +10,15 @@ from app.domain.schemas import (
     EmergencyCaseDetailSchema,
     UserRoleEnum
 )
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
 from app.services.case_service import get_case_or_404, build_case_snapshot
 from app.services.clinical_service import (
     handle_clinician_review,
     handle_clinician_data_request,
     handle_clinician_escalation,
-    handle_clinician_acknowledgement
+    handle_clinician_acknowledgement,
+    handle_hospital_escalation_acknowledgement
 )
 from app.api.deps import require_role, check_case_access
 
@@ -88,4 +91,26 @@ def acknowledge_telemetry_signal(
     check_case_access(case_id, current_user, db)
     case = get_case_or_404(db, case_id)
     handle_clinician_acknowledgement(db, case, ack_in, actor_user=current_user)
+    return build_case_snapshot(case)
+
+class HospitalEscalationAcknowledgeCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    notes: Optional[str] = None
+    timestamp: Optional[str] = None
+
+@router.post("/{case_id}/escalation/acknowledge", response_model=EmergencyCaseDetailSchema)
+def acknowledge_clinician_escalation(
+    case_id: str,
+    ack_in: Optional[HospitalEscalationAcknowledgeCreate] = None,
+    current_user: UserModel = Depends(require_role(UserRoleEnum.HOSPITAL_COMMAND.value, UserRoleEnum.PORTAL_ADMIN.value)),
+    db: Session = Depends(get_db)
+):
+    """
+    Hospital Command formally acknowledges urgent specialist escalation.
+    Propagates back to Clinician Workspace and logs audit event on Care Rail.
+    """
+    check_case_access(case_id, current_user, db)
+    case = get_case_or_404(db, case_id)
+    notes = ack_in.notes if ack_in else None
+    handle_hospital_escalation_acknowledgement(db, case, notes=notes, actor_user=current_user)
     return build_case_snapshot(case)

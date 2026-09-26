@@ -398,3 +398,69 @@ def test_acute_respiratory_distress_ingestion_and_ai(medic_token):
     assert case_data["patient"]["name"] == "Radha Sharma"
     assert case_data["currentVitals"]["spo2"] == 86
     assert case_data["currentVitals"]["heartRate"] == 118
+
+
+# --------------------------------------------------------------------------
+# 13. Source Fidelity & Non-Hallucination Gate (No Unsupported Devices/Gauges)
+# --------------------------------------------------------------------------
+def test_source_fidelity_no_hallucinated_device_or_gauge(medic_token):
+    headers = {"Authorization": f"Bearer {medic_token}"}
+    input_text = (
+        "52-year-old female Radha Sharma with acute respiratory distress and COPD history. "
+        "SpO2 86% on room air, respiratory rate 32, heart rate 108. Blood pressure 120 over 80. "
+        "IV access established. High-flow oxygen started. Ambulance ETA 9 minutes."
+    )
+    resp = client.post("/api/v1/cases/intake/text", json={"text": input_text}, headers=headers)
+    assert resp.status_code == 201
+    candidate = resp.json()["candidateData"]
+
+    # Interventions must be source-faithful
+    int_values = [itv["value"] for itv in candidate["interventions"]]
+    assert any("High-flow oxygen started" in v for v in int_values)
+    assert any("IV access established" in v for v in int_values)
+
+    # Must NOT hallucinate device, mask, or gauge not present in source
+    combined_int_text = " ".join(int_values).lower()
+    assert "non-rebreather" not in combined_int_text
+    assert "mask" not in combined_int_text
+    assert "cpap" not in combined_int_text
+    assert "ventilator" not in combined_int_text
+    assert "large-bore" not in combined_int_text
+    assert "cannula" not in combined_int_text
+
+    # Observations must not hallucinate accessory muscle use if not in source
+    obs_values = [o["value"] for o in candidate["observations"]]
+    combined_obs_text = " ".join(obs_values).lower()
+    assert "accessory muscle" not in combined_obs_text
+
+    # Medical history must be exact COPD, not expanded
+    hist_values = [h["value"] for h in candidate["medicalHistory"]]
+    assert "COPD" in hist_values
+    assert not any("Chronic Obstructive" in h for h in hist_values)
+
+
+# --------------------------------------------------------------------------
+# 14. Source Fidelity: Preserves Explicit Device & Strictly Honors Negations
+# --------------------------------------------------------------------------
+def test_source_fidelity_explicit_device_and_negations(medic_token):
+    headers = {"Authorization": f"Bearer {medic_token}"}
+    input_text = (
+        "42-year-old male. Oxygen via non-rebreather mask started. "
+        "Large-bore IV line placed. No chest pain. No active bleeding. No history of COPD."
+    )
+    resp = client.post("/api/v1/cases/intake/text", json={"text": input_text}, headers=headers)
+    assert resp.status_code == 201
+    candidate = resp.json()["candidateData"]
+
+    # When device IS in source, it MUST be preserved
+    int_values = [itv["value"] for itv in candidate["interventions"]]
+    assert any("non-rebreather mask" in v.lower() for v in int_values)
+    assert any("large-bore" in v.lower() for v in int_values)
+
+    # Negations must be strictly respected
+    obs_values = [o["value"].lower() for o in candidate["observations"]]
+    assert not any("chest pain" in o for o in obs_values)
+    assert not any("bleeding" in o for o in obs_values)
+
+    hist_values = [h["value"].lower() for h in candidate["medicalHistory"]]
+    assert not any("copd" in h for h in hist_values)

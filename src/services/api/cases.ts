@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+﻿import { apiClient } from './client';
 import type { EmergencyCase } from '../../types/emergency';
 
 export async function fetchCase(caseId: string): Promise<EmergencyCase> {
@@ -19,5 +19,15 @@ export async function submitTrafficDelay(caseId: string, trafficDelayMinutes: nu
   return apiClient<EmergencyCase>(`/cases/${caseId}/traffic`, {
     method: 'POST',
     body: JSON.stringify({ trafficDelayMinutes }),
+  });
+}
+
+export async function submitPatientArrival(
+  caseId: string,
+  payload?: { facility?: string; notes?: string; timestamp?: string }
+): Promise<EmergencyCase> {
+  return apiClient<EmergencyCase>(`/cases/${caseId}/arrival`, {
+    method: 'POST',
+    body: JSON.stringify(payload || {}),
   });
 }

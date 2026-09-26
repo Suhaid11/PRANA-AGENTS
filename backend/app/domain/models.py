@@ -336,11 +336,11 @@ class FacilityReadinessModel(Base):
 
     id = Column(String(64), primary_key=True)
     case_id = Column(String(64), ForeignKey("cases.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
-    status = Column(String(64), default="PRE_ALERT_TRANSMITTED", nullable=False) # PRE_ALERT_TRANSMITTED, ACCEPTED, PREPARING, BAY_READY, ACKNOWLEDGED
-    assigned_bay = Column(String(128), nullable=False)
+    status = Column(String(64), default="UNKNOWN", nullable=False) # UNKNOWN, PRE_ALERT_TRANSMITTED, ACCEPTED, PREPARING, BAY_READY, ACKNOWLEDGED
+    assigned_bay = Column(String(128), nullable=True)
     confirmed_by = Column(String(128), nullable=True)
     timestamp = Column(String(32), nullable=True)
-    is_pre_alert_dispatched = Column(Boolean, default=True, nullable=False)
+    is_pre_alert_dispatched = Column(Boolean, default=False, nullable=False)
     is_pre_alert_acknowledged = Column(Boolean, default=False, nullable=False)
     acknowledged_at = Column(String(32), nullable=True)
     bed_number = Column(String(64), nullable=True)
