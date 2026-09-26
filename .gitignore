@@ -17,8 +17,26 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
 *.sw?
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Python & Virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+backend/.venv/
+.venv/
+env/
+venv/
+*.egg-info/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+backend/*.db
+

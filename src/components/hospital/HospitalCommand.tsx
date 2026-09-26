@@ -1,42 +1,92 @@
 import React, { useState } from 'react';
 import { useEmergency } from '../../context/useEmergency';
+import { useAuth } from '../../auth/AuthContext';
 import { CareConduit } from '../conduit/CareConduit';
 import { CareRail } from '../timeline/CareRail';
 import { WhyThisHospitalModal } from '../facility/WhyThisHospitalModal';
-import { Building2, CheckCircle2, ShieldCheck, Stethoscope, ArrowUpRight } from 'lucide-react';
+import { PrehospitalHandoverPanel } from '../handover/PrehospitalHandoverPanel';
+import { 
+  Building2, 
+  CheckCircle2, 
+  ShieldCheck, 
+  Stethoscope, 
+  ArrowUpRight,
+  FileText
+} from 'lucide-react';
 
 export const HospitalCommand: React.FC = () => {
-  const { activeCase, confirmHospitalBay, derivedEta } = useEmergency();
+  const { 
+    activeCase, 
+    confirmHospitalBay, 
+    derivedEta,
+    handoverPackage,
+    isHandoverModalOpen,
+    setIsHandoverModalOpen
+  } = useEmergency();
+  const { role, hasPermission, notifyUnauthorizedAction } = useAuth();
   const [isWhyModalOpen, setIsWhyModalOpen] = useState(false);
 
-  const { ambulance, patient, hospitalReadiness, clinicianEndorsement } = activeCase;
+  const { ambulance, patient, hospitalReadiness, clinicianEndorsement, domain, facilityMatching } = activeCase;
   const isBayReady = hospitalReadiness?.status === 'BAY_READY';
   const assignedBay = hospitalReadiness?.assignedBay || 'Trauma Bay 1 (Red Zone)';
   const isClinicianEndorsed = clinicianEndorsement?.status === 'CONFIRMED';
   const clinicianName = clinicianEndorsement?.clinicianName || 'Dr. Sunita Rao, MD';
 
+  const topCandidate = facilityMatching?.candidates.find((c) => c.isPrimary) || facilityMatching?.candidates[0];
+
   const handleConfirmReady = () => {
+    if (!hasPermission('BAY_READY')) {
+      notifyUnauthorizedAction(
+        'Confirm Sterile Bay Readiness',
+        `Role '${role || 'ANONYMOUS'}' lacks hospital charge privileges. Bay readiness confirmation requires Hospital Command authority.`,
+        'HOSPITAL_COMMAND'
+      );
+      return;
+    }
     confirmHospitalBay(assignedBay);
   };
+
+  // Domain-specific ED checklists
+  const checklistItems = domain === 'SNAKEBITE' ? [
+    { name: 'Polyvalent Antivenom Bank', state: 'READY', detail: '10 vials reconstituted cold-chain reserve' },
+    { name: '20WBCT Clotting Tubes', state: 'STANDBY', detail: 'Clean glass tubes prepared in stat lab' },
+    { name: 'Toxicology On-Call Fellow', state: 'NOTIFIED', detail: 'Dr. C. Hegde paged for snakebite consult' },
+    { name: 'Fresh Frozen Plasma Units', state: 'RESERVED', detail: 'Coagulation replacement units on hold' },
+    { name: 'ICU Hemodialysis Suite', state: 'CLEAR', detail: 'Renal watch bed staged' },
+  ] : domain === 'POISONING' ? [
+    { name: 'Atropine Sulfate Ampoules', state: 'READY', detail: 'High-dose 2mg infusion packs staged' },
+    { name: 'Pralidoxime (2-PAM) Stock', state: 'RESERVED', detail: 'Cholinesterase reactivator verified' },
+    { name: 'Mechanical Ventilator Bay', state: 'HOT STANDBY', detail: 'Suction and ventilator checked at Bay 4' },
+    { name: 'Decontamination Station', state: 'ISOLATED', detail: 'Dermal rinse area prepped' },
+    { name: 'ICU Toxicology Registrar', state: 'ON-SITE', detail: 'Toxicology intensivist scrubbed in' },
+  ] : [
+    { name: 'CT Scanner Suite', state: 'HOT STANDBY', detail: 'Cleared for immediate polytrauma scan' },
+    { name: 'O-Negative Blood Units', state: 'READY', detail: '4 units thawed in trauma blood refrigerator' },
+    { name: 'Trauma Surgery Team', state: 'ON-SITE', detail: 'Surgical registrar & scrub nurse alerted' },
+    { name: 'ICU Bed Allocation', state: 'RESERVED', detail: 'Bed ICU-B3 held with ventilator' },
+    { name: 'Interventional Radiology', state: 'ALERTED', detail: 'On-call angio team paged' },
+  ];
 
   return (
     <>
       <div className="flex flex-col gap-6 py-2">
-        {/* 1. Editorial Top Headline */}
+        {/* 1. Top Editorial Headline */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <div className="text-[11px] font-extrabold text-[#0E62FE] uppercase tracking-widest mb-1">
-              Receiving Facility Command · Emergency Readiness Console
+            <div className="text-[10px] font-black text-[#0E62FE] uppercase tracking-widest mb-1 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Receiving Facility Command · Emergency Readiness Console</span>
             </div>
-            <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 tracking-tight leading-[0.95]">
+            <h1 className="text-3xl sm:text-4xl font-black text-slate-950 tracking-tight leading-[0.95]">
               Hospital <br />
               <span className="text-slate-400 font-normal">Readiness & Bay Command.</span>
             </h1>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="px-3.5 py-1.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-xs">
-              {ambulance.assignedHospital.toUpperCase()}
+            <span className="px-4 py-2 rounded-full text-xs font-black bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-xs flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-emerald-600" />
+              <span>{ambulance.assignedHospital.toUpperCase()}</span>
             </span>
           </div>
         </div>
@@ -44,120 +94,221 @@ export const HospitalCommand: React.FC = () => {
         {/* 2. Contextual Reception Conduit (Inbound Corridor & Bay Standby) */}
         <CareConduit variant="readiness" />
 
-        {/* 3. Main Hospital Command Stage: Focal Readiness Experience */}
+        {/* 3. Main Hospital Command Stage: Inbound Triage & Capability Verification */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* LEFT / CENTER (7 cols): Incoming Triage & Why This Hospital? */}
-          <div className="lg:col-span-7 flex flex-col gap-5">
+          <div className="lg:col-span-7 flex flex-col gap-5 min-w-0">
             
+            {/* Phase 18 Prehospital Handover Card */}
+            <div className="p-6 rounded-3xl bg-gradient-to-br from-white via-slate-50 to-blue-50/40 border border-slate-200/90 shadow-sm flex flex-col gap-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-[#0E62FE]" />
+                  <div>
+                    <h3 className="font-black text-sm text-slate-900 uppercase tracking-tight">
+                      Prehospital Handover Package
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-bold block">
+                      Canonical Transit Record & Vital Timeline Snapshot
+                    </span>
+                  </div>
+                </div>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${
+                  handoverPackage?.status === 'ACKNOWLEDGED'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                    : 'bg-blue-50 text-[#0E62FE] border-blue-200'
+                }`}>
+                  {handoverPackage?.status === 'ACKNOWLEDGED' ? 'HANDOVER FORMALLY RECEIVED' : 'READY TO REVIEW'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Provenance & Integrity Hash</span>
+                  <span className="text-xs font-black text-slate-900 block mt-0.5 font-mono">
+                    {handoverPackage?.integrityHash ? `${handoverPackage.integrityHash.slice(0, 12)}...` : 'SHA-256 Digest'}
+                  </span>
+                  <span className="text-[10px] text-emerald-600 font-bold">100% SHA-256 Digest Match</span>
+                </div>
+                <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Completeness</span>
+                  <span className="text-xs font-black text-slate-900 block mt-0.5">
+                    {handoverPackage?.completeness.completenessPercentage || 100}% Verified
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium">{handoverPackage?.vitalTimeline.length || 0} Vital Snapshots</span>
+                </div>
+                <div className="p-3 rounded-2xl bg-white border border-slate-200/80 shadow-2xs">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">ED Status</span>
+                  <span className="text-xs font-black text-slate-900 block mt-0.5">
+                    {handoverPackage?.status === 'ACKNOWLEDGED' ? 'Received' : 'Pending Review'}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    {handoverPackage?.acknowledgedBy?.name ? `By ${handoverPackage.acknowledgedBy.name}` : 'Awaiting sign-off'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-[11px] text-slate-500 leading-relaxed font-medium">
+                  {handoverPackage?.status === 'ACKNOWLEDGED'
+                    ? `Prehospital handover package formally acknowledged at ${handoverPackage.acknowledgedAt || 'inbound window'}.`
+                    : 'Streaming telemetry, administered procedures, and tele-specialist review compiled for receiving ED briefing.'}
+                </p>
+                <button
+                  onClick={() => setIsHandoverModalOpen(true)}
+                  className="px-5 py-2.5 rounded-2xl bg-[#0E62FE] hover:bg-[#0050E6] text-white text-xs font-black shadow-md shadow-blue-500/25 transition-all cursor-pointer hover:scale-105 shrink-0 ml-3 flex items-center gap-1.5"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>{handoverPackage?.status === 'ACKNOWLEDGED' ? 'View Handover' : 'Open Handover'}</span>
+                </button>
+              </div>
+            </div>
+
             {/* Incoming Triage & Bay Status Card */}
-            <div className="prana-float-card p-6 bg-white/90 backdrop-blur-md flex flex-col gap-5">
+            <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm flex flex-col gap-5">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-[#0E62FE]" />
-                  <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-tight">
+                  <h3 className="font-black text-sm text-slate-900 uppercase tracking-tight">
                     Incoming Patient Triage & Resuscitation Bay
                   </h3>
                 </div>
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold border uppercase ${
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black border uppercase tracking-wider ${
                   isBayReady
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                    : 'bg-blue-50 text-[#0E62FE] border-blue-200/80'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                    : 'bg-blue-50 text-[#0E62FE] border-blue-200'
                 }`}>
                   {isBayReady ? 'BAY 1 STERILE & VERIFIED' : 'INBOUND PRE-ALERT ACTIVE'}
                 </span>
               </div>
 
               {/* Arrival Countdown Hero Display */}
-              <div className="p-5 rounded-3xl bg-[#F8FAFC] border border-slate-200/70 flex flex-wrap items-center justify-between gap-4">
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-50 to-blue-50/30 border border-slate-200/80 flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
                     ESTIMATED ARRIVAL WINDOW
                   </span>
                   <div className="flex items-baseline gap-2 mt-0.5">
-                    <span className="text-4xl font-extrabold font-tabular text-slate-900 leading-none">
+                    <span className="text-4xl font-black font-tabular text-slate-950 leading-none">
                       {derivedEta}
                     </span>
                     <span className="text-base font-bold text-slate-400">MINUTES</span>
                   </div>
-                  <span className="text-xs text-slate-500 mt-1 block">
-                    Corridor: Ring Road Arterial ({ambulance.currentSpeedKmH} km/h)
+                  <span className="text-xs text-slate-500 mt-1 block font-medium">
+                    Corridor: Ring Road Arterial ({ambulance.currentSpeedKmH} km/h) · {ambulance.isTrafficDelayed ? 'Delay Active (+8m)' : 'Transit Nominal'}
                   </span>
                 </div>
 
-                <div className="p-3.5 rounded-2xl bg-white border border-slate-200/60 flex flex-col text-right">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Incoming Unit</span>
-                  <span className="text-sm font-extrabold text-slate-900">{ambulance.callSign} (ALS Unit)</span>
-                  <span className="text-xs text-slate-500">Lead: {ambulance.crewLead}</span>
+                <div className="p-3.5 rounded-2xl bg-white border border-slate-200/70 shadow-2xs flex flex-col text-right">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Incoming Unit</span>
+                  <span className="text-sm font-black text-slate-900">{ambulance.callSign} (ALS Unit)</span>
+                  <span className="text-xs text-slate-500 font-medium">Lead: {ambulance.crewLead}</span>
                 </div>
               </div>
 
               {/* Remote Specialist Endorsement Status */}
               <div className={`p-4 rounded-2xl border text-xs flex items-center justify-between ${
                 isClinicianEndorsed 
-                  ? 'bg-emerald-50/70 border-emerald-200 text-emerald-900' 
-                  : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                  ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950' 
+                  : 'bg-amber-50/70 border-amber-300 text-amber-950'
               }`}>
-                <div className="flex items-center gap-2.5">
-                  <Stethoscope className={`w-4 h-4 shrink-0 ${isClinicianEndorsed ? 'text-emerald-600' : 'text-amber-600'}`} />
+                <div className="flex items-center gap-3">
+                  <Stethoscope className={`w-5 h-5 shrink-0 ${isClinicianEndorsed ? 'text-emerald-600' : 'text-amber-600'}`} />
                   <div>
-                    <strong className="block font-extrabold">
+                    <strong className="block font-black text-xs">
                       {isClinicianEndorsed ? 'Tele-Specialist Handshake Verified' : 'Clinical Protocol Review in Transit'}
                     </strong>
-                    <span className="text-[11px] opacity-90">
+                    <span className="text-[11px] opacity-90 block mt-0.5">
                       {isClinicianEndorsed 
-                        ? `Protocol endorsed by ${clinicianName} (${clinicianEndorsement?.timestamp})` 
-                        : 'Remote emergency specialist is reviewing live sensor telemetry'}
+                        ? `Protocol confirmed by ${clinicianName} (${clinicianEndorsement?.timestamp})` 
+                        : 'Remote emergency specialist is reviewing streaming telemetry'}
                     </span>
                   </div>
                 </div>
-                <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold border ${
-                  isClinicianEndorsed ? 'bg-emerald-100 border-emerald-300' : 'bg-amber-100 border-amber-300'
+                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black border uppercase tracking-wider ${
+                  isClinicianEndorsed ? 'bg-emerald-100 border-emerald-300 text-emerald-800' : 'bg-amber-100 border-amber-300 text-amber-800'
                 }`}>
                   {clinicianEndorsement?.status || 'PENDING'}
                 </span>
               </div>
 
+              {/* PRANA Decision Support (Hospital Projection: Inbound Triage Awareness) */}
+              {activeCase.aiDecisionSupport && (
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9.5px] font-mono font-black text-[#0E62FE] uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#0E62FE]" />
+                      <span>PRANA DECISION SUPPORT (HOSPITAL COMMAND)</span>
+                    </span>
+                    <span className="text-[9px] font-mono font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded">
+                      SITUATIONAL AWARENESS ONLY
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-black text-slate-900">
+                        {activeCase.aiDecisionSupport.title}
+                      </div>
+                      <div className="text-[11px] text-slate-600 mt-0.5">
+                        {activeCase.aiDecisionSupport.observedData}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="text-[8.5px] font-mono uppercase text-slate-400 block font-bold">ED READINESS ACTION</span>
+                      <span className="text-[10.5px] font-bold text-slate-800">
+                        {isBayReady ? 'Bay 1 Prepared & Armed' : 'Allocate Resuscitation Bay'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-[8.5px] font-mono text-slate-400 text-center uppercase tracking-tight pt-1 border-t border-slate-200/60">
+                    {activeCase.aiDecisionSupport.safetyLabel || 'SIMULATED DECISION SUPPORT — NOT A DIAGNOSIS'}
+                  </div>
+                </div>
+              )}
+
               {/* Bay Allocation Confirmation Action */}
-              <div className="p-4 rounded-3xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-4">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-4">
                 <div>
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
                     Resuscitation Bay Allocation
                   </span>
-                  <span className="text-sm font-extrabold text-slate-900 mt-0.5 block">
+                  <span className="text-sm font-black text-slate-900 mt-0.5 block">
                     {assignedBay}
                   </span>
-                  <span className="text-[11px] text-slate-500">
-                    {isBayReady ? 'Sister Philomina, RN · Confirmed' : 'Awaiting charge nurse sterile clearance'}
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    {isBayReady ? 'Sister Philomina, RN · Verified' : 'Awaiting charge nurse sterile clearance'}
                   </span>
                 </div>
 
                 {!isBayReady ? (
                   <button
                     onClick={handleConfirmReady}
-                    className="px-5 py-2.5 rounded-2xl bg-[#0E62FE] hover:bg-blue-700 text-white text-xs font-extrabold shadow-sm shadow-blue-500/20 transition-all cursor-pointer"
+                    className="px-5 py-2.5 rounded-2xl bg-[#0E62FE] hover:bg-[#0050E6] text-white text-xs font-black shadow-md shadow-blue-500/25 transition-all cursor-pointer hover:scale-105"
                   >
                     Confirm Bay Ready
                   </button>
                 ) : (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300">
-                    <CheckCircle2 className="w-4 h-4" />
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black border border-emerald-300">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <span>Bay Verified Ready</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Why This Hospital? Embedded Matrix Section */}
-            <div className="prana-float-card p-6 bg-white/90 backdrop-blur-md flex flex-col gap-3">
+            {/* Why This Hospital? Section (Transparent, Explainable Rationale) */}
+            <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm flex flex-col gap-3.5">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#0E62FE] uppercase tracking-wider">
+                <div className="flex items-center gap-2 text-xs font-black text-[#0E62FE] uppercase tracking-wider">
                   <ShieldCheck className="w-4 h-4" />
                   <span>Why This Hospital? (Match Fit Rationale)</span>
                 </div>
                 <button
                   onClick={() => setIsWhyModalOpen(true)}
-                  className="text-[11px] font-extrabold text-[#0E62FE] hover:underline flex items-center gap-1"
+                  className="text-[11px] font-black text-[#0E62FE] hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   <span>Compare Alternatives</span>
                   <ArrowUpRight className="w-3.5 h-3.5" />
@@ -165,83 +316,78 @@ export const HospitalCommand: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs pt-1">
-                <div className="p-3 rounded-2xl bg-[#F8FAFC] border border-slate-200/60">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Clinical Match</span>
-                  <strong className="text-xs font-bold text-slate-900 block mt-0.5">Level-1 Trauma Suite</strong>
-                  <span className="text-[10px] text-slate-500">24/7 Surgical & IR Team</span>
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Clinical Match</span>
+                  <strong className="text-xs font-black text-slate-900 block mt-0.5">{topCandidate?.traumaLevel || 'Level-1 Suite'}</strong>
+                  <span className="text-[10px] text-slate-500">{topCandidate?.specialtyFit || '24/7 Surgical Care'}</span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-[#F8FAFC] border border-slate-200/60">
-                  <span className="text-[10px] font-extrabold text-slate-400 uppercase block">Transit Corridor</span>
-                  <strong className="text-xs font-bold text-slate-900 block mt-0.5">{derivedEta} Mins Live ETA</strong>
-                  <span className="text-[10px] text-slate-500">7.2 km Ring Road highway</span>
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Transit Corridor</span>
+                  <strong className="text-xs font-black text-slate-900 block mt-0.5">{derivedEta} Mins Live ETA</strong>
+                  <span className="text-[10px] text-slate-500">{topCandidate?.distanceKm || '7.2'} km arterial</span>
                 </div>
 
-                <div className="p-3 rounded-2xl bg-emerald-50/60 border border-emerald-100">
-                  <span className="text-[10px] font-extrabold text-emerald-700 uppercase block">Suitability Score</span>
-                  <strong className="text-lg font-extrabold font-tabular text-emerald-900 block leading-tight mt-0.5">94% Fit</strong>
-                  <span className="text-[10px] text-emerald-700">Top ranked in catchment</span>
+                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200">
+                  <span className="text-[9px] font-black text-emerald-700 uppercase tracking-wider block">Suitability Score</span>
+                  <strong className="text-lg font-black font-mono text-emerald-900 block leading-tight mt-0.5">{topCandidate?.matchScore || 94}% Fit</strong>
+                  <span className="text-[10px] text-emerald-700 font-bold">Top ranked in catchment</span>
                 </div>
               </div>
 
-              <p className="text-[11px] text-slate-600 leading-relaxed pt-1">
-                Manipal Hospital was selected over closer community clinics because advanced resuscitative angio-embolization and dedicated trauma surgery are required for suspected severe hemorrhage.
+              <p className="text-[11px] text-slate-700 leading-relaxed pt-1 bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                <strong className="text-[#0E62FE]">Recommendation for Clinician Review: </strong>
+                {facilityMatching?.algorithmRationale || `${ambulance.assignedHospital} was recommended over closer community clinics because advanced capability is required for this clinical picture.`}
               </p>
             </div>
           </div>
 
           {/* RIGHT PANEL (5 cols): ED Resource Checklist & Incoming Patient Profile */}
-          <div className="lg:col-span-5 flex flex-col gap-5">
+          <div className="lg:col-span-5 flex flex-col gap-5 min-w-0">
             
             {/* Incoming Patient Snapshot */}
-            <div className="prana-float-card p-6 bg-white/90 backdrop-blur-md flex flex-col gap-3">
-              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                Incoming Patient Profile
+            <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm flex flex-col gap-3">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                INCOMING PATIENT PROFILE
               </span>
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-base font-extrabold text-slate-900">{patient.name}</h4>
-                  <span className="text-xs text-slate-500 font-medium">
-                    {patient.age}y · {patient.sex} · Conscious: {patient.consciousState}
+                  <h4 className="text-base font-black text-slate-950">{patient.name}</h4>
+                  <span className="text-xs text-slate-500 font-semibold">
+                    {patient.age}y · {patient.sex} · Conscious: <strong className="text-slate-800">{patient.consciousState}</strong>
                   </span>
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-xs font-extrabold bg-blue-50 text-[#0E62FE] border border-blue-200">
+                <span className="px-2.5 py-1 rounded-full text-xs font-black bg-rose-100 text-rose-800 border border-rose-200 font-mono">
                   GCS {patient.gcsScore}/15
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-[#F8FAFC] border border-slate-200/60 text-xs text-slate-700">
-                <strong className="block text-slate-900 text-[11px] mb-0.5">Reported Injury:</strong>
-                {patient.chiefComplaint}
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-xs text-slate-700">
+                <strong className="block text-slate-900 text-[11px] mb-0.5">Reported Incident & Injury:</strong>
+                {patient.incidentType} — {patient.chiefComplaint}
               </div>
             </div>
 
             {/* ED Capability Checklist */}
-            <div className="prana-float-card p-6 bg-white/90 backdrop-blur-md flex flex-col gap-3">
+            <div className="p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm flex flex-col gap-3">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <div className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">
+                <div className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
                   ED Capability Checklist
                 </div>
-                <span className="text-[10px] font-bold text-emerald-600">
+                <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                   5/5 Verified
                 </span>
               </div>
 
-              {[
-                { name: 'CT Scanner Suite', state: 'HOT STANDBY', detail: 'Cleared for immediate polytrauma scan' },
-                { name: 'O-Negative Blood Units', state: 'READY', detail: '4 units thawed in trauma blood refrigerator' },
-                { name: 'Trauma Surgery Team', state: 'ON-SITE', detail: 'Surgical registrar & scrub nurse alerted' },
-                { name: 'ICU Bed Allocation', state: 'RESERVED', detail: 'Bed ICU-B3 held with ventilator' },
-                { name: 'Interventional Radiology', state: 'ALERTED', detail: 'On-call angio team paged' },
-              ].map((item, idx) => (
-                <div key={idx} className="p-3 rounded-2xl bg-[#F8FAFC] border border-slate-200/60 flex items-center justify-between">
+              {checklistItems.map((item, idx) => (
+                <div key={idx} className="p-3 rounded-2xl bg-slate-50 border border-slate-200/70 flex items-center justify-between">
                   <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0 stroke-[2.5]" />
                     <div>
-                      <span className="text-xs font-extrabold text-slate-900 block leading-tight">{item.name}</span>
-                      <span className="text-[10px] text-slate-500">{item.detail}</span>
+                      <span className="text-xs font-black text-slate-900 block leading-tight">{item.name}</span>
+                      <span className="text-[10px] text-slate-500 font-medium">{item.detail}</span>
                     </div>
                   </div>
-                  <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                  <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0 uppercase tracking-wider">
                     {item.state}
                   </span>
                 </div>
@@ -250,8 +396,8 @@ export const HospitalCommand: React.FC = () => {
           </div>
         </div>
 
-        {/* 4. Bottom: Compact Persistent Care Rail */}
-        <div className="mt-2 pt-4 border-t border-slate-200/50">
+        {/* 4. Bottom Care Rail */}
+        <div className="mt-2 pt-4 border-t border-slate-200/60">
           <CareRail compact={true} />
         </div>
       </div>
@@ -260,6 +406,12 @@ export const HospitalCommand: React.FC = () => {
       <WhyThisHospitalModal 
         isOpen={isWhyModalOpen} 
         onClose={() => setIsWhyModalOpen(false)} 
+      />
+
+      {/* Prehospital Handover Package Modal */}
+      <PrehospitalHandoverPanel
+        isOpen={isHandoverModalOpen}
+        onClose={() => setIsHandoverModalOpen(false)}
       />
     </>
   );

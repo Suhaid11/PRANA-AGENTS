@@ -537,9 +537,24 @@ function verifyMultiScenarioReset(): boolean {
     p1Reset.cdsDataSentAt === undefined &&
     p1Reset.patient.name === 'Manoj Kumar';
 
-  const resetSuccess = t1Clean && s1Clean && p1Clean;
+  // 4. Respiratory Distress -> Modify + Handoff -> Reset
+  const r1 = startScenarioCase('PR-4018');
+  const r1Modified = sendCaseDataToCdsState(
+    triggerVitalDeteriorationState(r1, { heartRate: 130, spo2: 78, systolicBp: 140, diastolicBp: 90, respiratoryRate: 40, temperatureC: 37.4 })
+  );
+  const r1Reset = startScenarioCase('PR-4018');
+  const r1Clean = 
+    r1Modified.currentVitals.heartRate === 130 && 
+    r1Modified.cdsDataStatus === 'SENT' &&
+    r1Reset.currentVitals.heartRate === 122 && 
+    r1Reset.cdsDataStatus === 'NOT_SENT' &&
+    r1Reset.cdsDataPackage === undefined &&
+    r1Reset.cdsDataSentAt === undefined &&
+    r1Reset.patient.name === 'Radha Sharma';
+
+  const resetSuccess = t1Clean && s1Clean && p1Clean && r1Clean;
   if (resetSuccess) {
-    console.log(green('✓ Reset Cycle Verified: TRAUMA → RESET → SNAKEBITE → RESET → POISONING → RESET without browser reload. Zero cross-scenario leakage.'));
+    console.log(green('✓ Reset Cycle Verified: TRAUMA → RESET → SNAKEBITE → RESET → POISONING → RESET → RESPIRATORY → RESET. Zero cross-scenario leakage.'));
   } else {
     console.log(red('✗ Reset Cycle Failed: state persisted between resets.'));
   }
@@ -555,7 +570,7 @@ export function runFullAudit() {
   const results: ScenarioAuditResult[] = [];
 
   // Scenario 1: TRAUMA
-  console.log(cyan('\n[1/3] Auditing Scenario 1: TRAUMA (Rahul Verma, 34M — Polytrauma & Hypovolemia)'));
+  console.log(cyan('\n[1/4] Auditing Scenario 1: TRAUMA (Rahul Verma, 34M — Polytrauma & Hypovolemia)'));
   results.push(runScenarioAudit(
     'PR-8492',
     { heartRate: 126, spo2: 89, systolicBp: 86, diastolicBp: 52, respiratoryRate: 26, temperatureC: 36.7 },
@@ -566,7 +581,7 @@ export function runFullAudit() {
   ));
 
   // Scenario 2: SNAKEBITE
-  console.log(cyan('\n[2/3] Auditing Scenario 2: SNAKEBITE (Sunita Gowda, 28F — Russell\'s Viper Envenomation)'));
+  console.log(cyan('\n[2/4] Auditing Scenario 2: SNAKEBITE (Sunita Gowda, 28F — Russell\'s Viper Envenomation)'));
   results.push(runScenarioAudit(
     'PR-7104',
     { heartRate: 118, spo2: 95, systolicBp: 102, diastolicBp: 64, respiratoryRate: 22, temperatureC: 37.1 },
@@ -577,7 +592,7 @@ export function runFullAudit() {
   ));
 
   // Scenario 3: POISONING
-  console.log(cyan('\n[3/3] Auditing Scenario 3: POISONING (Manoj Kumar, 45M — Organophosphate SLUDGE Crisis)'));
+  console.log(cyan('\n[3/4] Auditing Scenario 3: POISONING (Manoj Kumar, 45M — Organophosphate SLUDGE Crisis)'));
   results.push(runScenarioAudit(
     'PR-9521',
     { heartRate: 42, spo2: 84, systolicBp: 84, diastolicBp: 50, respiratoryRate: 30, temperatureC: 36.4 },
@@ -587,22 +602,34 @@ export function runFullAudit() {
     'Aster'
   ));
 
+  // Scenario 4: RESPIRATORY DISTRESS
+  console.log(cyan('\n[4/4] Auditing Scenario 4: RESPIRATORY_DISTRESS (Radha Sharma, 52F — Acute Respiratory Distress)'));
+  results.push(runScenarioAudit(
+    'PR-4018',
+    { heartRate: 118, spo2: 82, systolicBp: 138, diastolicBp: 86, respiratoryRate: 36, temperatureC: 37.1 },
+    'DOC-712',
+    'Dr. Sunita Rao, MD (Pulmonary Critical Care)',
+    'Manipal',
+    'Vydehi'
+  ));
+
   // Comprehensive Table Display
-  console.log('\n' + bold('----------------------------------------------------------------------------------------'));
-  console.log(bold('  FINAL AUDIT PASS/FAIL MATRIX (15 Steps × 3 Scenarios = 45 Assertions)'));
-  console.log(bold('----------------------------------------------------------------------------------------'));
+  console.log('\n' + bold('----------------------------------------------------------------------------------------------------------'));
+  console.log(bold('  FINAL AUDIT PASS/FAIL MATRIX (15 Steps × 4 Scenarios = 60 Assertions)'));
+  console.log(bold('----------------------------------------------------------------------------------------------------------'));
 
   let totalSteps = 0;
   let passedSteps = 0;
 
   console.log(
     'Step'.padEnd(6) +
-    'Milestone / State Transition'.padEnd(36) +
-    'Trauma'.padEnd(14) +
-    'Snakebite'.padEnd(14) +
-    'Poisoning'.padEnd(14)
+    'Milestone / State Transition'.padEnd(34) +
+    'Trauma'.padEnd(12) +
+    'Snakebite'.padEnd(12) +
+    'Poisoning'.padEnd(12) +
+    'Respiratory'.padEnd(12)
   );
-  console.log('='.repeat(84));
+  console.log('='.repeat(88));
 
   for (let i = 0; i < 15; i++) {
     const stepNum = i + 1;
@@ -610,26 +637,30 @@ export function runFullAudit() {
     const tPass = results[0].steps[i]?.passed;
     const sPass = results[1].steps[i]?.passed;
     const pPass = results[2].steps[i]?.passed;
+    const rPass = results[3].steps[i]?.passed;
 
-    totalSteps += 3;
+    totalSteps += 4;
     if (tPass) passedSteps++;
     if (sPass) passedSteps++;
     if (pPass) passedSteps++;
+    if (rPass) passedSteps++;
 
     const tStr = tPass ? green('✓ PASS') : red('✗ FAIL');
     const sStr = sPass ? green('✓ PASS') : red('✗ FAIL');
     const pStr = pPass ? green('✓ PASS') : red('✗ FAIL');
+    const rStr = rPass ? green('✓ PASS') : red('✗ FAIL');
 
     console.log(
       `#${stepNum}`.padEnd(6) +
-      stepName.slice(0, 34).padEnd(36) +
-      tStr.padEnd(23) +
-      sStr.padEnd(23) +
-      pStr
+      stepName.slice(0, 32).padEnd(34) +
+      tStr.padEnd(21) +
+      sStr.padEnd(21) +
+      pStr.padEnd(21) +
+      rStr
     );
   }
 
-  console.log('='.repeat(84));
+  console.log('='.repeat(88));
   const summaryColor = passedSteps === totalSteps ? green : red;
   console.log(bold(`TOTAL ASSERTIONS: ${summaryColor(`${passedSteps}/${totalSteps} PASSED`)}`));
 
@@ -641,8 +672,8 @@ export function runFullAudit() {
     console.log(`  ${icon} [${r.scenarioId}] ${r.domain} (${r.patientName}): ${r.steps.filter(s => s.passed).length}/15 steps`);
   });
 
-  if (passedSteps === 45 && resetOk) {
-    console.log(green(bold('\n★★★ ALL 45 ACCEPTANCE GATES PASSED — FULL PROTOTYPE STATE MACHINE INTEGRATION PROVEN ★★★\n')));
+  if (passedSteps === 60 && resetOk) {
+    console.log(green(bold('\n★★★ ALL 60 ACCEPTANCE GATES PASSED — FULL PROTOTYPE STATE MACHINE INTEGRATION PROVEN ★★★\n')));
     return true;
   } else {
     console.log(red(bold(`\n⚠ AUDIT INCOMPLETE: ${totalSteps - passedSteps} assertion(s) failed.\n`)));

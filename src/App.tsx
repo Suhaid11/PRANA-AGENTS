@@ -1,4 +1,5 @@
 import React from 'react';
+import { AuthProvider } from './auth/AuthContext';
 import { EmergencyProvider } from './context/EmergencyContext';
 import { useEmergency } from './context/useEmergency';
 import { PranaShell } from './components/shell/PranaShell';
@@ -28,9 +29,11 @@ const AppContent: React.FC = () => {
 
 export function App() {
   return (
-    <EmergencyProvider>
-      <AppContent />
-    </EmergencyProvider>
+    <AuthProvider>
+      <EmergencyProvider>
+        <AppContent />
+      </EmergencyProvider>
+    </AuthProvider>
   );
 }
 

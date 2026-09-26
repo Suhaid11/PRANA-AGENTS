@@ -43,7 +43,21 @@ export interface EmergencyContextType {
   setTrafficDelay: (additionalMinutes?: number) => void;
   continueCare: (detail?: string) => void;
   selectScenario: (scenarioId: string) => void;
+  loadCaseData: (caseData: EmergencyCase) => void;
   resetMission: () => void;
+  // Phase 23.2 Clinician-to-Field Data Request Handshake
+  requestFieldData: (field: string, reason?: string, priority?: 'CRITICAL' | 'HIGH' | 'MODERATE') => void;
+  submitFieldResponse: (requestId: string, responseText: string) => void;
+  dismissFieldDataRequest: (requestId: string) => void;
+  isBackendConnected: boolean;
+  backendStatus: 'CONNECTED' | 'OFFLINE_FALLBACK' | 'CONNECTING';
+  realtimeStatus: 'LIVE' | 'RECONNECTING' | 'OFFLINE';
+  // Phase 18 Prehospital Handover Package
+  handoverPackage: import('../types/emergency').PrehospitalHandoverPackage | null;
+  isHandoverModalOpen: boolean;
+  setIsHandoverModalOpen: (open: boolean) => void;
+  generateHandoverSnapshot: () => Promise<void>;
+  acknowledgeHandoverPackage: (notes?: string) => Promise<void>;
 }
 
 export const EmergencyContext = createContext<EmergencyContextType | null>(null);

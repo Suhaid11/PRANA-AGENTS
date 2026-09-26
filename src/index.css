@@ -5,16 +5,42 @@
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'Geist Mono', monospace;
 
-    /* Palette calibrated to the reference images */
-    --prana-canvas: #EEF1F6;
-    --prana-surface: #FFFFFF;
-    --prana-blue: #0E62FE;
-    --prana-blue-dark: #0050E6;
-    --prana-blue-light: #EFF5FF;
+    /* Master Semantic Color Tokens */
+    --prana-navy-950: #080E1E;
+    --prana-navy-900: #0B132B;
+    --prana-navy-800: #111C38;
+    
+    --prana-blue-600: #0E62FE;
+    --prana-blue-700: #0050E6;
+    --prana-blue-50: #EFF5FF;
+    --prana-blue-100: #DBEAFE;
+    
+    --prana-teal-500: #06B6D4;
+    --prana-teal-600: #0891B2;
+    --prana-teal-50: #ECFEFF;
+    
+    --prana-green-500: #10B981;
+    --prana-green-600: #059669;
+    --prana-green-50: #ECFDF5;
+    
+    --prana-amber-500: #F59E0B;
+    --prana-amber-600: #D97706;
+    --prana-amber-50: #FFFBEB;
+    
+    --prana-red-500: #EF4444;
+    --prana-red-600: #DC2626;
+    --prana-red-50: #FEF2F2;
+    
     --prana-slate-900: #0C1220;
     --prana-slate-700: #334155;
     --prana-slate-500: #64748B;
     --prana-slate-400: #94A3B8;
+    --prana-slate-200: #E2E8F0;
+    --prana-slate-100: #F1F5F9;
+
+    --prana-canvas: #EDF1F7;
+    --prana-canvas-subtle: #E4E9F2;
+    --prana-surface: #FFFFFF;
   }
 
   body {
@@ -24,42 +50,40 @@
     margin: 0;
     padding: 0;
     -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-/* Tabular Numerals for Telemetry */
+/* Tabular Numerals for Telemetry & Timers */
 .font-tabular {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 
-/* Editorial Floating Surfaces from Reference Images */
+/* Deep Navy Left Structural Command Rail */
+.prana-shell-rail {
+  background: linear-gradient(180deg, #091024 0%, #060B18 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 4px 0 24px -4px rgba(6, 11, 24, 0.25);
+}
+
+/* High-Density Spatial Floating Surfaces */
 .prana-float-card {
   background: #FFFFFF;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.95);
-  box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.05), 0 0 1px 1px rgba(226, 232, 240, 0.6);
+  border-radius: 24px;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 16px 36px -12px rgba(12, 18, 32, 0.05), 0 2px 8px -2px rgba(12, 18, 32, 0.02);
   position: relative;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.prana-float-pill {
-  background: #FFFFFF;
-  border-radius: 9999px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 4px 14px -2px rgba(15, 23, 42, 0.04);
+.prana-float-card:hover {
+  box-shadow: 0 20px 42px -12px rgba(14, 98, 254, 0.08), 0 3px 10px -2px rgba(12, 18, 32, 0.03);
+  border-color: rgba(203, 213, 225, 0.95);
 }
 
-.prana-active-blue-card {
-  background: #0E62FE;
-  border-radius: 28px;
-  color: #FFFFFF;
-  box-shadow: 0 20px 35px -10px rgba(14, 98, 254, 0.35);
-}
-
-/* Subtle Inner Rim Highlight */
+/* Inner Rim Highlight for Premium Dimensional Feel */
 .prana-float-card::after {
   content: '';
   position: absolute;
@@ -69,14 +93,45 @@
   box-shadow: inset 0 1.5px 0 0 rgba(255, 255, 255, 0.95);
 }
 
-/* Concentric Aura Rings for Medical Centerpiece */
-@keyframes ring-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+/* Frosted Dock Capsules */
+.prana-float-pill {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-radius: 9999px;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  box-shadow: 0 4px 16px -2px rgba(12, 18, 32, 0.05);
+}
+
+/* Hero Electric Blue Anchor Surface */
+.prana-active-blue-card {
+  background: linear-gradient(135deg, #0E62FE 0%, #0050E6 100%);
+  border-radius: 24px;
+  color: #FFFFFF;
+  box-shadow: 0 20px 38px -10px rgba(14, 98, 254, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Editorial Glass Overlay Container */
+.prana-editorial-hero {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(240, 245, 255, 0.92) 100%);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 28px;
+  box-shadow: 0 24px 48px -16px rgba(14, 98, 254, 0.08);
+}
+
+/* Telemetry Waves & Scanner Animation */
+@keyframes ecg-scan {
+  0% { stroke-dashoffset: 240; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.animate-ecg-scan {
+  stroke-dasharray: 60, 25;
+  animation: ecg-scan 2.6s linear infinite;
 }
 
 @keyframes pulse-aura {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
+  0%, 100% { opacity: 0.55; transform: scale(1); }
   50% { opacity: 0.95; transform: scale(1.03); }
 }
 
@@ -84,13 +139,67 @@
   animation: pulse-aura 3.5s ease-in-out infinite;
 }
 
-/* Pulse animation for active telemetry wave */
-@keyframes ecg-scan {
-  0% { stroke-dashoffset: 200; }
-  100% { stroke-dashoffset: 0; }
+/* Custom Scrollbar for Care Rail & Lists */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
-.animate-ecg-scan {
-  stroke-dasharray: 60, 20;
-  animation: ecg-scan 2.5s linear infinite;
+.prana-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.prana-scrollbar::-webkit-scrollbar-track {
+  background: rgba(226, 232, 240, 0.4);
+  border-radius: 8px;
+}
+.prana-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border-radius: 8px;
+}
+.prana-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
+}
+
+/* ==========================================================================
+   Phase 18: Professional A4 Print Stylesheet for Prehospital Handover Sheet
+   ========================================================================== */
+@media print {
+  body {
+    background: #FFFFFF !important;
+    color: #000000 !important;
+  }
+  
+  /* Hide interactive web navigation, shell rail, and action buttons */
+  nav, aside, .prana-shell-rail, button, .no-print, input {
+    display: none !important;
+  }
+
+  /* Unfold modal container for natural paper document flow */
+  .fixed.inset-0 {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .max-w-4xl {
+    max-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  .max-h-\[92vh\] {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
 }

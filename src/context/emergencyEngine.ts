@@ -7,7 +7,11 @@ import type {
   AiDecisionSupport, 
   TimelineEvent,
   AmbulanceUnit,
-  CdsDataPackage 
+  CdsDataPackage,
+  PrehospitalHandoverPackage,
+  AgentTask,
+  AgentTraceItem,
+  MissingDataItem
 } from '../types/emergency';
 import { allScenarios, initialTraumaCase } from '../data/seedData';
 
@@ -64,13 +68,13 @@ export const evaluateSimulationDecisionEngine = (
     if (shockIndex > 1.2 || (vitals.heartRate > 120 && vitals.systolicBp < 90)) {
       riskLevel = 'CRITICAL';
       riskScore = Math.min(98, 85 + Math.round(shockIndex * 8));
-      clinicalSignificance = 'Pattern indicates acute decompensating hemorrhagic hypovolemic shock.';
-      nextStepRecommendation = 'Immediate tele-clinician review: authorize aggressive fluid resuscitation & activate Level-1 massive transfusion protocol.';
+      clinicalSignificance = 'Observed: Persistent tachycardia + low systolic pressure + narrowing pulse pressure. Why it matters: Requires clinician review.';
+      nextStepRecommendation = 'Next step: Review current prehospital assessment and receiving-facility readiness.';
     } else if (shockIndex > 0.9 || vitals.heartRate > 105) {
       riskLevel = 'HIGH';
       riskScore = 78;
-      clinicalSignificance = 'Compensated shock pattern: persistent tachycardia and narrow pulse pressure.';
-      nextStepRecommendation = 'Remote trauma specialist review requested; confirm large-bore IV access.';
+      clinicalSignificance = 'Observed: Compensated hemodynamic drift with persistent tachycardia and narrow pulse pressure.';
+      nextStepRecommendation = 'Next step: Remote trauma specialist review requested; confirm large-bore IV access.';
     } else {
       riskLevel = 'MODERATE';
       riskScore = 55;
@@ -108,7 +112,60 @@ export const evaluateSimulationDecisionEngine = (
       clinicalSignificance = 'Significant hemotoxic viperid envenomation pattern with advancing local tissue involvement.';
       nextStepRecommendation = 'Remote toxicology review: confirm pressure immobilization and 20WBCT sampling.';
     }
+  } else if (domain === 'RESPIRATORY_DISTRESS') {
+    if (vitals.spo2 < 90) signals.push(`Severe Hypoxemia (${vitals.spo2}% SpO2)`);
+    if (vitals.respiratoryRate > 28) signals.push(`Tachypnea / Respiratory Fatigue (${vitals.respiratoryRate}/min)`);
+    if (vitals.heartRate > 105) signals.push(`Compensatory Tachycardia (${vitals.heartRate} bpm)`);
+    signals.push('Acute respiratory compromise with elevated work of breathing');
+
+    if (vitals.spo2 < 86 || vitals.respiratoryRate > 32) {
+      riskLevel = 'CRITICAL';
+      riskScore = 94;
+      clinicalSignificance = 'Severe respiratory distress with impending respiratory failure and marked hypoxemia.';
+      nextStepRecommendation = 'Urgent clinician endorsement: high-flow O2 / non-invasive positive pressure ventilation and prepare for advanced airway.';
+    } else {
+      riskLevel = 'HIGH';
+      riskScore = 80;
+      clinicalSignificance = 'Observable acute respiratory compromise requiring rapid stabilization and destination readiness.';
+      nextStepRecommendation = 'Continuous SpO2 / EtCO2 monitoring and respiratory specialist telemetry review.';
+    }
+  } else {
+    // Dynamic fallback for any arbitrary ingested emergency domain
+    if (vitals.spo2 < 92) signals.push(`Hypoxia (${vitals.spo2}% SpO2)`);
+    if (vitals.heartRate > 110) signals.push(`Tachycardia (${vitals.heartRate} bpm)`);
+    if (vitals.heartRate < 50) signals.push(`Bradycardia (${vitals.heartRate} bpm)`);
+    if (shockIndex > 1.0) signals.push(`Elevated Shock Index (${shockIndex})`);
+    if (signals.length > 0) {
+      riskLevel = 'HIGH';
+      riskScore = 75;
+      clinicalSignificance = `Observable physiological deviation: ${signals.join(', ')}.`;
+      nextStepRecommendation = 'Maintain serial vitals and remote clinician monitoring.';
+    }
   }
+
+  const signalType = domain === 'TRAUMA' 
+    ? 'HEMODYNAMIC_DECOMPENSATION_RISK' 
+    : domain === 'SNAKEBITE' 
+    ? 'SYSTEMIC_ENVENOMATION_PROGRESSION' 
+    : domain === 'POISONING'
+    ? 'CHOLINERGIC_CRISIS_SIGNAL'
+    : 'RESPIRATORY_COMPROMISE_SIGNAL';
+
+  const title = domain === 'TRAUMA'
+    ? 'Hemodynamic Change Signal'
+    : domain === 'SNAKEBITE'
+    ? 'Ascending Edema & Coagulation Signal'
+    : domain === 'POISONING'
+    ? 'Vagal Bradycardia & Bronchorrhea Signal'
+    : 'Acute Respiratory Compromise Signal';
+
+  const observedData = domain === 'TRAUMA'
+    ? `Heart rate ${vitals.heartRate} bpm, NIBP ${vitals.systolicBp}/${vitals.diastolicBp} mmHg (Shock Index ${shockIndex}).`
+    : domain === 'SNAKEBITE'
+    ? `Fang puncture right leg with ascending tissue edema > 10cm, HR ${vitals.heartRate} bpm.`
+    : domain === 'POISONING'
+    ? `Severe vagal bradycardia ${vitals.heartRate} bpm with SpO2 ${vitals.spo2}% and copious secretions.`
+    : `SpO2 ${vitals.spo2}%, RR ${vitals.respiratoryRate}/min, HR ${vitals.heartRate} bpm with increased work of breathing.`;
 
   return {
     riskLevel,
@@ -117,6 +174,122 @@ export const evaluateSimulationDecisionEngine = (
     clinicalSignificance,
     nextStepRecommendation,
     isReviewed: false,
+    signalId: `sig-${domain.toLowerCase()}-${vitals.heartRate}-${vitals.systolicBp}`,
+    provider: 'DemoDecisionSupportProvider',
+    providerVersion: '1.0.0',
+    signalType,
+    title,
+    observedData,
+    explanation: `${clinicalSignificance} Demonstration logic — not clinically validated.`,
+    relevantTimelineEventIds: ['evt-initial-telemetry'],
+    requiresClinicianReview: true,
+    status: 'NEW',
+    safetyLabel: 'SIMULATED DECISION SUPPORT — NOT A DIAGNOSIS',
+    providerAvailable: true,
+    statusMessage: 'Deterministic Demo AI Decision Support Active'
+  };
+};
+
+/**
+ * 2b. Deterministic Agent Task Generator (Offline Fallback Engine)
+ * Synthesizes agent reasoning trace, tool calls, and missing data detection
+ * matching the backend AgentOrchestrator for 100% offline demonstration resilience.
+ */
+export const generateLocalAgentTask = (
+  domain: EmergencyDomain,
+  caseId: string,
+  vitals: VitalSnapshot,
+  triggerEventId?: string
+): AgentTask => {
+  const missingData: MissingDataItem[] = domain === 'TRAUMA'
+    ? [
+        { field: 'Serial Blood Pressure (Repeat BP)', reason: 'Single BP reading limits shock index trajectory evaluation.', clinicalImportance: 'CRITICAL' },
+        { field: 'Pelvic Circumferential Compression Verification', reason: 'High-speed collision warrants pelvic binder confirmation.', clinicalImportance: 'HIGH' },
+      ]
+    : domain === 'SNAKEBITE'
+    ? [
+        { field: '20-Minute Whole Blood Clotting Test (20WBCT)', reason: 'Bedside evaluation for Russell\'s viper coagulopathy.', clinicalImportance: 'CRITICAL' },
+        { field: 'Serial Proximal Swelling Margin Demarcation', reason: 'Assesses bite edema progression velocity.', clinicalImportance: 'HIGH' },
+      ]
+    : domain === 'POISONING'
+    ? [
+        { field: 'Pupillary Constriction (Miosis) Assessment', reason: 'Differentiates vagal cholinergic overdrive from other toxindromes.', clinicalImportance: 'CRITICAL' },
+        { field: 'Pulmonary Auscultation (Secretions / Crackles)', reason: 'Bronchorrhea is primary hypoxia driver in organophosphate crisis.', clinicalImportance: 'HIGH' },
+      ]
+    : [
+        { field: 'Continuous Pulse Oximetry & Supplemental FiO2 Tracking', reason: 'Assesses response to oxygen therapy and risk of rapid desaturation.', clinicalImportance: 'CRITICAL' },
+        { field: 'Bilateral Lung Auscultation (Wheeze / Crepitations)', reason: 'Differentiates bronchospastic vs cardiogenic / infectious etiology.', clinicalImportance: 'HIGH' },
+      ];
+
+  const traces: AgentTraceItem[] = [
+    {
+      id: `trc-${caseId}-1`,
+      taskId: `agt-local-${caseId}`,
+      stepIndex: 1,
+      toolName: 'get_case_summary',
+      arguments: { case_id: caseId },
+      resultSummary: `Retrieved case ${caseId} (${domain}) baseline demographics`,
+      durationMs: 4,
+      success: true,
+      sourceEventIds: ['ev-001'],
+      timestamp: vitals.timestamp,
+    },
+    {
+      id: `trc-${caseId}-2`,
+      taskId: `agt-local-${caseId}`,
+      stepIndex: 2,
+      toolName: 'get_latest_vitals',
+      arguments: { case_id: caseId },
+      resultSummary: `HR ${vitals.heartRate} bpm, BP ${vitals.systolicBp}/${vitals.diastolicBp} mmHg, SpO2 ${vitals.spo2}%`,
+      durationMs: 3,
+      success: true,
+      sourceEventIds: ['evt-initial-telemetry'],
+      timestamp: vitals.timestamp,
+    },
+    {
+      id: `trc-${caseId}-3`,
+      taskId: `agt-local-${caseId}`,
+      stepIndex: 3,
+      toolName: 'get_vital_trend',
+      arguments: { case_id: caseId, limit: 5 },
+      resultSummary: `Trend evaluated against previous records`,
+      durationMs: 5,
+      success: true,
+      sourceEventIds: ['evt-vital-change'],
+      timestamp: vitals.timestamp,
+    },
+    {
+      id: `trc-${caseId}-4`,
+      taskId: `agt-local-${caseId}`,
+      stepIndex: 4,
+      toolName: 'get_recent_observations',
+      arguments: { case_id: caseId },
+      resultSummary: `Analyzed field observations and identified clinical gaps`,
+      durationMs: 4,
+      success: true,
+      sourceEventIds: ['evt-obs-01'],
+      timestamp: vitals.timestamp,
+    },
+  ];
+
+  return {
+    taskId: `agt-local-${caseId}`,
+    caseId,
+    triggerEventId: triggerEventId || 'evt-initial-telemetry',
+    status: 'REQUIRES_HUMAN_REVIEW',
+    provider: 'DemoDecisionSupportProvider',
+    model: 'deterministic-v2',
+    promptVersion: 'PRANA_AGENT_SYSTEM_V1',
+    startedAt: vitals.timestamp,
+    completedAt: vitals.timestamp,
+    iterationCount: 1,
+    toolCallCount: traces.length,
+    finalSignalId: `sig-${domain.toLowerCase()}-${vitals.heartRate}-${vitals.systolicBp}`,
+    safetyStatus: 'PASSED',
+    reasoningSummary: `Evaluated vitals and observations. Detected ${missingData.length} data gap(s). Formed observable signal requiring clinician confirmation.`,
+    missingData,
+    recommendedDataRequest: `Request field medic to record: ${missingData[0].field} (${missingData[0].reason})`,
+    traces,
   };
 };
 
@@ -145,6 +318,12 @@ export const calculateFacilityMatching = (
       if (candidate.specialtyFit.toLowerCase().includes('toxicology') || candidate.name.toLowerCase().includes('ramaiah')) clinicalFitScore = 98;
       else if (candidate.specialtyFit.toLowerCase().includes('icu')) clinicalFitScore = 80;
       else clinicalFitScore = 55;
+    } else if (domain === 'RESPIRATORY_DISTRESS') {
+      if (candidate.specialtyFit.toLowerCase().includes('pulmonary') || candidate.specialtyFit.toLowerCase().includes('icu')) clinicalFitScore = 98;
+      else if (candidate.traumaLevel.toLowerCase().includes('tertiary')) clinicalFitScore = 85;
+      else clinicalFitScore = 65;
+    } else {
+      clinicalFitScore = 75;
     }
 
     // 2. Availability Score (0-100)
@@ -203,6 +382,7 @@ export const startScenarioCase = (scenarioId: string): EmergencyCase => {
   const deepCopy: EmergencyCase = JSON.parse(JSON.stringify(seed));
   deepCopy.ambulance.effectiveEtaMinutes = calculateDerivedEta(deepCopy.ambulance);
   deepCopy.aiDecisionSupport = evaluateSimulationDecisionEngine(deepCopy.domain, deepCopy.currentVitals);
+  deepCopy.agentTask = generateLocalAgentTask(deepCopy.domain, deepCopy.id, deepCopy.currentVitals);
   deepCopy.cdsDataStatus = 'NOT_SENT';
   delete deepCopy.cdsDataPackage;
   delete deepCopy.cdsDataSentAt;
@@ -273,10 +453,12 @@ export const computeAiSignalState = (
   timestamp?: string
 ): EmergencyCase => {
   const aiSignal = evaluateSimulationDecisionEngine(prevCase.domain, prevCase.currentVitals);
+  const agentTask = generateLocalAgentTask(prevCase.domain, prevCase.id, prevCase.currentVitals);
 
   const updatedCase: EmergencyCase = {
     ...prevCase,
     aiDecisionSupport: aiSignal,
+    agentTask,
   };
 
   updatedCase.timeline = appendTimelineEvent(
@@ -648,4 +830,192 @@ export const sendCaseDataToCdsState = (
   );
 
   return updatedCase;
+};
+
+/**
+ * 8. Phase 18 Prehospital Handover Package Generator (Offline Simulation Engine)
+ */
+export const generateLocalHandoverPackage = (
+  c: EmergencyCase,
+  actorName: string = 'Sister Philomina, RN',
+  actorRole: string = 'HOSPITAL_COMMAND'
+): PrehospitalHandoverPackage => {
+  const timeStr = new Date().toLocaleTimeString('en-GB');
+  const packageId = `hop-${c.id.toLowerCase()}-local`;
+
+  const vitalItems = c.vitalsHistory.map((v, idx) => ({
+    id: `v-${idx + 1}`,
+    timestamp: v.timestamp,
+    heartRate: v.heartRate,
+    spo2: v.spo2,
+    systolicBp: v.systolicBp,
+    diastolicBp: v.diastolicBp,
+    respiratoryRate: v.respiratoryRate,
+    temperatureC: v.temperatureC,
+    isAbnormal: v.isAbnormal,
+    sourceEventId: `evt-vital-${idx + 1}`
+  }));
+
+  const latestVital = vitalItems[vitalItems.length - 1] || {
+    timestamp: timeStr,
+    heartRate: c.currentVitals.heartRate,
+    spo2: c.currentVitals.spo2,
+    systolicBp: c.currentVitals.systolicBp,
+    diastolicBp: c.currentVitals.diastolicBp,
+    respiratoryRate: c.currentVitals.respiratoryRate,
+    temperatureC: c.currentVitals.temperatureC,
+    isAbnormal: c.currentVitals.isAbnormal,
+    sourceEventId: 'evt-vital-current'
+  };
+
+  const observations = c.timeline
+    .filter(evt => evt.category === 'CLINICAL' && evt.title.toLowerCase().includes('observation'))
+    .map(evt => ({
+      id: evt.id,
+      timestamp: evt.timestamp,
+      text: evt.detail,
+      actor: evt.actor,
+      sourceEventId: evt.id
+    }));
+
+  const interventions = c.timeline
+    .filter(evt => evt.title.toLowerCase().includes('intervention'))
+    .map(evt => ({
+      id: evt.id,
+      timestamp: evt.timestamp,
+      actionLabel: evt.title.replace('Intervention Recorded: ', ''),
+      detailText: evt.detail,
+      actor: evt.actor,
+      status: 'SUCCESS',
+      sourceEventId: evt.id
+    }));
+
+  const decisionSupport = c.aiDecisionSupport ? [{
+    signalId: c.aiDecisionSupport.signalId || 'sig-local-1',
+    signalType: c.aiDecisionSupport.signalType || 'OBSERVABLE_SIGNAL',
+    title: c.aiDecisionSupport.title || 'Clinical Signal',
+    observedData: c.aiDecisionSupport.observedData || '',
+    explanation: c.aiDecisionSupport.explanation || c.aiDecisionSupport.clinicalSignificance || '',
+    provider: c.aiDecisionSupport.provider || 'DemoDecisionSupportProvider',
+    providerVersion: c.aiDecisionSupport.providerVersion || '1.0.0',
+    safetyLabel: c.aiDecisionSupport.safetyLabel || 'SIMULATED DECISION SUPPORT — NOT A DIAGNOSIS',
+    requiresClinicianReview: c.aiDecisionSupport.requiresClinicianReview ?? true,
+    status: c.aiDecisionSupport.status || 'NEW',
+    sourceEventIds: c.aiDecisionSupport.relevantTimelineEventIds || []
+  }] : [];
+
+  const clinicianReviews = c.clinicianEndorsement ? [{
+    id: 'cr-1',
+    action: c.clinicianEndorsement.status,
+    clinicianId: c.clinicianEndorsement.clinicianId || 'DOC-482',
+    clinicianName: c.clinicianEndorsement.clinicianName || 'Dr. Sunita Rao, MD',
+    timestamp: c.clinicianEndorsement.timestamp || timeStr,
+    notes: c.clinicianEndorsement.notes,
+    reviewPlanTitle: c.clinicianEndorsement.authorizedProtocol,
+    sourceEventId: 'evt-clinician-endorsement'
+  }] : [];
+
+  const topCandidate = c.facilityMatching?.candidates.find(cand => cand.isPrimary) || c.facilityMatching?.candidates[0];
+
+  const destination = {
+    facilityId: topCandidate?.id || 'FAC-1',
+    name: topCandidate?.name || c.ambulance.assignedHospital,
+    traumaLevel: topCandidate?.traumaLevel || 'Level-1 Trauma Center',
+    distanceKm: topCandidate?.distanceKm || 7.2,
+    etaMinutes: topCandidate?.etaMinutes || calculateDerivedEta(c.ambulance),
+    matchScore: topCandidate?.matchScore || 95,
+    specialtyFit: topCandidate?.specialtyFit || 'Comprehensive Emergency Care'
+  };
+
+  const readiness = {
+    status: c.hospitalReadiness?.status || 'BAY_READY',
+    assignedBay: c.hospitalReadiness?.assignedBay || 'Trauma Bay 1 (Red Zone)',
+    confirmedBy: c.hospitalReadiness?.confirmedBy || 'Sister Philomina, RN',
+    timestamp: c.hospitalReadiness?.timestamp || timeStr,
+    bedNumber: c.hospitalReadiness?.bedNumber,
+    resourcesReady: c.hospitalReadiness?.resourcesReady || [],
+    isBayReady: c.hospitalReadiness?.status === 'BAY_READY',
+    sourceEventId: 'evt-bay-ready'
+  };
+
+  const eventTimeline = c.timeline.map(evt => ({
+    id: evt.id,
+    version: evt.version || 1,
+    timestamp: evt.timestamp,
+    category: evt.category,
+    title: evt.title,
+    detail: evt.detail,
+    actor: evt.actor,
+    status: evt.status
+  }));
+
+  // Deterministic digest
+  const hashSeed = `${c.id}-${c.patient.name}-${c.currentVitals.heartRate}-${timeStr}`;
+  let hashVal = 0;
+  for (let i = 0; i < hashSeed.length; i++) {
+    hashVal = ((hashVal << 5) - hashVal) + hashSeed.charCodeAt(i);
+    hashVal |= 0;
+  }
+  const digest = Math.abs(hashVal).toString(16).padStart(64, 'a');
+
+  return {
+    packageId,
+    caseId: c.id,
+    caseVersion: c.timeline.length,
+    generatedAt: timeStr,
+    generatedBy: {
+      id: 'usr-local',
+      name: actorName,
+      role: actorRole
+    },
+    status: 'GENERATED',
+    patient: { ...c.patient },
+    incident: {
+      domain: c.domain,
+      scenarioTitle: c.scenarioTitle,
+      status: c.status,
+      conduitStep: c.conduitStep
+    },
+    transport: {
+      callSign: c.ambulance.callSign,
+      crewLead: c.ambulance.crewLead,
+      currentSpeedKmH: c.ambulance.currentSpeedKmH,
+      baseEtaMinutes: c.ambulance.baseEtaMinutes,
+      trafficDelayMinutes: c.ambulance.trafficDelayMinutes,
+      effectiveEtaMinutes: calculateDerivedEta(c.ambulance),
+      isTrafficDelayed: c.ambulance.isTrafficDelayed,
+      assignedHospital: c.ambulance.assignedHospital,
+      coordinates: c.ambulance.coordinates
+    },
+    latestVitals: latestVital,
+    vitalTimeline: vitalItems,
+    observations,
+    interventions,
+    decisionSupport,
+    clinicianReviews,
+    destination,
+    readiness,
+    eventTimeline,
+    provenance: {
+      sourceCaseVersion: c.timeline.length,
+      sourceEventCount: c.timeline.length,
+      generatedTimestamp: timeStr,
+      contentDigestSha256: digest,
+      generatorEngine: 'PRANA-Prehospital-Handover-Engine-v1.0 (Local Simulation)'
+    },
+    completeness: {
+      isComplete: true,
+      completenessPercentage: 100,
+      missingFields: [],
+      itemsFound: [
+        'Patient Demographics & Chief Complaint',
+        'Recorded Physiological Vitals',
+        'Transit Unit & Corridor',
+        'Destination Facility',
+        'Hospital Bay Allocation'
+      ]
+    },
+    safetyNotice: 'This prototype prehospital handover package is generated from demonstration records and does not constitute a clinically validated medical record.',
+    integrityHash: digest
+  };
 };

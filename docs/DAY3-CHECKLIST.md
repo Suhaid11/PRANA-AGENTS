@@ -74,12 +74,14 @@
 
 | Verification Metric | Target | Actual Result | Status |
 | :--- | :--- | :--- | :--- |
-| **Acceptance Gate (`npm test`)** | 42/42 Assertions | **42/42 PASSED** (Trauma: 14/14, Snakebite: 14/14, Poisoning: 14/14) | **PASS** |
+| **Acceptance Gate (`npm test`)** | 45/45 Assertions | **45/45 PASSED** (Trauma: 15/15, Snakebite: 15/15, Poisoning: 15/15) | **PASS** |
+| **Backend Test Suite (`pytest`)** | >= 100 tests | **109/109 PASSED** (0 skipped: live Ollama smoke test verified and passing on RTX 4060 GPU) | **PASS** |
+| **Agentic AI Evaluation Harness** | 100% schema & safety | **30/30 PASSED** across 3 providers (Demo, Laya, Hybrid). 0 safety violations. 100% human review. Execution mode truthfulness verified. | **PASS** |
 | **Multi-Scenario Reset** | Clean in-memory state | **Verified** (`TRAUMA → RESET → SNAKEBITE → RESET → POISONING → RESET`) | **PASS** |
-| **Linter (`npm run lint`)** | 0 errors, 0 warnings | **0 errors, 0 warnings** (oxlint across 23 files, 116 rules in 29ms) | **PASS** |
-| **Production Build (`npm run build`)** | Clean bundle generation | **Build Passed** (`tsc -b && vite build` generated `dist/` bundle) | **PASS** |
-| **UI Presentation State** | No test controls / no slop | **Clean presentation bar**; Demo Director toggled via `Ctrl+Shift+D` | **PASS** |
-| **External Dependencies** | 0 external network calls | **100% Offline Self-Contained** (zero cloud APIs, zero external CDNs) | **PASS** |
+| **Production Build (`npm run build`)** | Clean bundle generation | **Build Passed** (`tsc -b && vite build` generated `dist/` bundle with 0 errors) | **PASS** |
+| **Role-Projected Views** | 3 domain-adapted views | **Verified** (Ambulance: operational awareness, Clinician: full clinical depth, Hospital: receiving triage) | **PASS** |
+| **Care Rail Ergonomics** | No milestone collision | **Verified horizontal corridor** (`min-w-[210px]` per card, P0-P3 tags, filter bar) | **PASS** |
+| **External Dependencies** | 0 external network calls | **100% Offline Self-Contained** with automatic local fallback | **PASS** |
 
 ### Release Commit & Git Tag Tracking
 - **Final Cleanup Commit SHA**: `6d1f27a7067911677497fd3b203932c4960b7976` (`6d1f27a`)

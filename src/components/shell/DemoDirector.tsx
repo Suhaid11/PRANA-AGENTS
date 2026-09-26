@@ -56,6 +56,10 @@ export const DemoDirector: React.FC = () => {
         return { heartRate: 118, spo2: 95, systolicBp: 98, diastolicBp: 62, respiratoryRate: 22, temperatureC: 37.2, isAbnormal: true };
       case 'POISONING':
         return { heartRate: 44, spo2: 84, systolicBp: 86, diastolicBp: 52, respiratoryRate: 28, temperatureC: 36.4, isAbnormal: true };
+      case 'RESPIRATORY_DISTRESS':
+        return { heartRate: 118, spo2: 82, systolicBp: 138, diastolicBp: 86, respiratoryRate: 36, temperatureC: 37.1, isAbnormal: true };
+      default:
+        return { heartRate: 120, spo2: 90, systolicBp: 95, diastolicBp: 60, respiratoryRate: 24, temperatureC: 36.8, isAbnormal: true };
     }
   };
 

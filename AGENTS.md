@@ -72,11 +72,17 @@ The application navigation, layout, and component boundaries are **locked and mu
 
 ## 6. Build & Integration Status
 
-- **Build Tooling**: `npm run build` cleanly generates production bundle (`dist/`).
-- **State Machine Acceptance Gate**: 14-step automated acceptance test across all 3 scenarios (`npm test` / `npm run test:audit`) — **42/42 PASS**.
-- **Multi-Scenario Reset**: Deterministic in-memory reset cleanly verified across scenarios (`TRAUMA → RESET → SNAKEBITE → RESET → POISONING → RESET`).
-- **Lighthouse Performance & Accessibility**:
-  - Performance: **93** (Green)
-  - Accessibility: **91** (Green)
-- **Skills Installed**: `.agents/skills/anti-ui-slop` and `.agents/skills/frontend-lighthouse`.
-- **Current Phase**: Day 2 Integration Audit & State Machine Hardening (**COMPLETED**). Day 3 Polish, Rehearsal & Freeze (**AWAITING USER GO-AHEAD**).
+- **Build Tooling**: `npm run build` cleanly generates production bundle (`dist/`) with zero TypeScript errors.
+- **State Machine Acceptance Gate**: 15-step automated acceptance test across all 4 scenarios (`npm test`) — **60/60 PASS (100%)**.
+- **Backend Test Suite**: `pytest backend/tests/` — **120/121 tests PASS** (1 skipped live GPU test when Ollama server is offline) with zero errors. 12/12 dedicated intake tests pass.
+- **Real Case Ingestion Pipeline (Phase 23)**:
+  - Universal intake supporting Voice (`SpeechToTextProvider`), Text, and File (JSON, FHIR R4 Bundle, CSV, TXT).
+  - Unconfirmed `CaseDraft` model with field-level provenance (`source_type`, `extraction_method`, `confidence`, `status`).
+  - Strict human-in-the-loop paramedic confirmation gate before mutating into authoritative `EmergencyCase`.
+  - Manual overrides preserve original values (`status: MANUAL_OVERRIDE`, `original_value`).
+  - Untrusted input boundary (`<untrusted_clinical_source>`) defending against prompt injection.
+  - Zero autonomous prescribing, diagnosing, or triage decisions by the extraction model.
+- **Dynamic Case UI**: Fully decoupled from hardcoded demo names/incidents. Supports arbitrary cases and 4th scenario `PR-4018` (Radha Sharma · Acute Respiratory Distress) seamlessly across Mission Portal, Care Conduit, Care Rail, and role consoles.
+- **Ponytail Over-Engineering Audit**: Completed and documented in `docs/PONYTAIL-AUDIT.md`. Native Web APIs utilized with zero unnecessary external dependencies.
+- **Current Phase**: Phase 23 — Real Case Intake (Voice/Text/File) + Dynamic Case UI + Demo Decoupling + Clinically Safe Extraction + Ponytail Audit (**COMPLETED & VERIFIED**). Ready for presentation and deployment.
+

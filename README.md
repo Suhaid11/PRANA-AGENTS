@@ -223,6 +223,55 @@ Open **`http://localhost:4173/`** to view the live production build.
 
 ---
 
+## 🤖 AI Provider Setup & Agentic Benchmark
+
+PRANA's **Agentic Clinical Coordination Engine** operates without paid cloud API dependencies.
+
+### OPTION A — DEMO (Zero Setup)
+Runs 100% locally with deterministic clinical simulation logic.
+```bash
+# In backend/.env
+AI_PROVIDER=demo
+
+# Run the 22-case synthetic benchmark
+cd backend
+python -m app.ai.evaluation.run --provider demo
+```
+
+### OPTION B — LOCAL OPEN MODEL (Recommended for Competition)
+Runs on your local machine using open-weight foundation models via Ollama or vLLM:
+1. **Install Ollama**: [https://ollama.com](https://ollama.com)
+2. **Download Model**:
+   ```bash
+   ollama pull qwen2.5:3b
+   ```
+3. **Configure Environment** (`backend/.env`):
+   ```env
+   AI_PROVIDER=local
+   AI_LOCAL_RUNTIME=ollama
+   AI_LOCAL_BASE_URL=http://localhost:11434
+   AI_LOCAL_MODEL=qwen2.5:3b
+   ```
+4. **Verify Health**:
+   ```bash
+   curl http://localhost:8000/api/v1/ai/provider-status?provider=local
+   ```
+5. **Run Agentic Benchmark**:
+   ```bash
+   python -m app.ai.evaluation.run --provider local
+   ```
+
+### OPTION C — OPTIONAL CLOUD
+Only if explicitly configured for cloud evaluation:
+```env
+AI_PROVIDER=cloud
+AI_API_KEY=sk-...
+AI_CLOUD_MODEL=gpt-4o-mini
+```
+
+
+---
+
 ## 🎨 Design DNA: Clinical Spatialism
 
 PRANA adheres to **Clinical Spatialism**—a bespoke design philosophy created specifically for high-stress prehospital operations:
